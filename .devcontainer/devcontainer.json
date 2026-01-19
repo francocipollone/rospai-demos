@@ -1,0 +1,30 @@
+{
+  "name": "ROS Physical AI Dev",
+  "dockerComposeFile": "../docker/docker-compose.yml",
+  "service": "pai-dev",
+  "workspaceFolder": "/ros_ws",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "ubuntu",
+  "initializeCommand": "docker rm -f pai-dev 2>/dev/null || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "ms-iot.vscode-ros",
+        "redhat.vscode-xml",
+        "redhat.vscode-yaml",
+        "streetsidesoftware.code-spell-checker"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "ros.distro": "kilted",
+        "cmake.configureOnOpen": false
+      }
+    }
+  },
+  "postCreateCommand": "sudo chown -R ubuntu:ubuntu /ros_ws && echo 'Container ready!'"
+}

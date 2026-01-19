@@ -10,6 +10,8 @@
 
 ## Install
 
+### Option 1: Native Installation
+
 ```bash
 sudo apt update && sudo apt install upgrade -y
 mkdir ~/ws_pai/src -p && cd ~/ws_pai/src
@@ -20,6 +22,34 @@ rosdep install --from-paths src --ignore-src --rosdistro kilted -yir
 source /opt/ros/kilted/setup.bash
 colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
 ```
+
+### Option 2: Docker Development (Recommended)
+
+For containerized development with all dependencies pre-configured:
+
+```bash
+# Clone and import repositories on the host
+mkdir ~/ws_pai/src -p && cd ~/ws_pai/src
+git clone https://github.com/ros-physical-ai/demos
+vcs import . < demos/pai.repos --recursive
+
+# Allow GUI applications
+xhost +local:docker
+
+# Build and start the container
+cd ~/ws_pai/src/demos
+docker compose build
+docker compose run --rm pai-dev
+```
+
+Inside the container:
+```bash
+cd /ros_ws
+rosdep install --from-paths src --ignore-src --rosdistro kilted -yir
+colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
+```
+
+See [Docker Development Guide](./docs/docker_development.md) for detailed instructions.
 
 > [!NOTE]
 > We strongly recommend relying on [rmw_zenoh](https://github.com/ros2/rmw_zenoh) as the ROS 2 middleware.

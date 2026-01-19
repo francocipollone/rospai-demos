@@ -1,0 +1,84 @@
+services:
+  pai-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        ROS_DISTRO: kilted
+        USERNAME: ubuntu
+        USER_UID: ${HOST_UID:-1000}
+        USER_GID: ${HOST_GID:-1000}
+    image: ros-physical-ai-demos:kilted
+    container_name: pai-dev
+
+    # Interactive mode
+    stdin_open: true
+    tty: true
+
+    # Network mode for ROS 2 communication
+    network_mode: host
+
+    # Required for GUI applications (Gazebo, RViz)
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      # Uncomment to use rmw_zenoh middleware
+      - RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+    volumes:
+      # X11 socket for GUI
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/home/ubuntu/.Xauthority:ro
+
+      # Mount source code for development (parent directory containing all repos)
+      - ../../:/ros_ws/src:rw
+
+      # Persist build artifacts.
+      - ../.pai-build:/ros_ws/build
+      - ../.pai-install:/ros_ws/install
+      - ../.pai-log:/ros_ws/log
+
+      # Share SSH keys for git operations (optional)
+      - ${HOME}/.ssh:/home/ubuntu/.ssh:ro
+
+      # Share git config (optional)
+      - ${HOME}/.gitconfig:/home/ubuntu/.gitconfig:ro
+
+    # Device access for real hardware
+    devices:
+      - /dev/dri:/dev/dri  # GPU access
+      # - /dev/ttyACM0:/dev/ttyACM0  # Typical serial device for microcontroller boards. Uncomment and adjust as needed.
+
+    # For NVIDIA GPU support (requires nvidia-container-toolkit)
+    # Uncomment the following if using NVIDIA GPU
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    working_dir: /ros_ws
+
+    command: bash
+
+  # Zenoh router service (optional but recommended)
+  zenoh-router:
+    image: osrf/ros:kilted-desktop-full
+    container_name: zenoh-router
+    network_mode: host
+    command: >
+      bash -c "source /opt/ros/kilted/setup.bash && 
+               export RMW_IMPLEMENTATION=rmw_zenoh_cpp &&
+               ros2 run rmw_zenoh_cpp rmw_zenohd"
+    profiles:
+      - zenoh  # Only starts when explicitly requested
+
+volumes:
+  pai-build:
+  pai-install:
+  pai-log:

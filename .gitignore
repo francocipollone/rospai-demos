@@ -1,0 +1,4 @@
+# Build artifacts
+.pai-build
+.pai-install
+.pai-log
