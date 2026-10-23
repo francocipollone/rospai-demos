@@ -17,8 +17,21 @@ find_package(pai_tensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
-add_library(pai_policy_inference_core SHARED src/signature.cpp
-                                             src/tensor_view.cpp)
+# ONNX Runtime comes from the conda prefix (conda-forge onnxruntime-cpp), which
+# is on CMAKE_PREFIX_PATH; it ships no CMake config, so wrap it ourselves.
+find_path(
+  ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h
+  PATH_SUFFIXES onnxruntime/core/session onnxruntime REQUIRED)
+find_library(ONNXRUNTIME_LIBRARY onnxruntime REQUIRED)
+add_library(onnxruntime::onnxruntime SHARED IMPORTED)
+set_target_properties(
+  onnxruntime::onnxruntime
+  PROPERTIES IMPORTED_LOCATION "${ONNXRUNTIME_LIBRARY}"
+             INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR}")
+
+add_library(
+  pai_policy_inference_core SHARED src/signature.cpp src/tensor_view.cpp
+                                   src/ort_backend.cpp src/inference_core.cpp)
 target_include_directories(
   pai_policy_inference_core
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -26,6 +39,11 @@ target_include_directories(
 target_link_libraries(
   pai_policy_inference_core PUBLIC yaml-cpp::yaml-cpp rclcpp::rclcpp
                                    ${pai_tensor_msgs_TARGETS})
+# PRIVATE: ONNX Runtime headers never appear in the installed headers (pimpl),
+# so downstream packages need no onnxruntime target; the shared library
+# resolves libonnxruntime.so at load time from the environment.
+target_link_libraries(
+  pai_policy_inference_core PRIVATE onnxruntime::onnxruntime)
 
 install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
 install(
@@ -43,6 +61,11 @@ if(BUILD_TESTING)
   target_link_libraries(test_signature pai_policy_inference_core)
   target_compile_definitions(
     test_signature PRIVATE FIXTURE_DIR="${FIXTURE_DIR_PATH}")
+
+  ament_add_gtest(test_inference_core test/test_inference_core.cpp)
+  target_link_libraries(test_inference_core pai_policy_inference_core)
+  target_compile_definitions(
+    test_inference_core PRIVATE FIXTURE_DIR="${FIXTURE_DIR_PATH}")
 
   ament_add_gtest(test_tensor_view test/test_tensor_view.cpp)
   target_link_libraries(test_tensor_view pai_policy_inference_core)
