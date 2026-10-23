@@ -92,8 +92,8 @@ public:
     if (received == expected_) {
       return "";
     }
-    std::string message = "pipeline hash mismatch: policy expects '" + expected_ +
-      "' but the robot computed '" + received + "'";
+    std::string message = "pipeline hash mismatch: model " + expected_ +
+      ", pipeline " + received;
     if (enforce_) {
       throw std::runtime_error(message);
     }

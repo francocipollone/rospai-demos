@@ -45,9 +45,21 @@ target_link_libraries(
 target_link_libraries(
   pai_policy_inference_core PRIVATE onnxruntime::onnxruntime)
 
+add_library(pai_policy_inference_node SHARED src/inference_node.cpp)
+target_link_libraries(
+  pai_policy_inference_node
+  PUBLIC pai_policy_inference_core rclcpp::rclcpp
+         rclcpp_components::component ${pai_tensor_msgs_TARGETS})
+rclcpp_components_register_node(
+  pai_policy_inference_node PLUGIN "pai_policy_inference::InferenceNode"
+  EXECUTABLE inference_node_component)
+
+add_executable(inference_node src/inference_node_main.cpp)
+target_link_libraries(inference_node pai_policy_inference_node)
+
 install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
 install(
-  TARGETS pai_policy_inference_core
+  TARGETS pai_policy_inference_core pai_policy_inference_node
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -72,6 +84,8 @@ if(BUILD_TESTING)
   target_compile_definitions(
     test_tensor_view PRIVATE FIXTURE_DIR="${FIXTURE_DIR_PATH}")
 endif()
+
+install(TARGETS inference_node DESTINATION lib/${PROJECT_NAME})
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(rclcpp rclcpp_components pai_tensor_msgs std_msgs

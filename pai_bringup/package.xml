@@ -23,6 +23,8 @@
   <exec_depend>pai_assets</exec_depend>
   <exec_depend>pai_description</exec_depend>
   <exec_depend>pai_phone_teleop</exec_depend>
+  <exec_depend>pai_policy_inference</exec_depend>
+  <exec_depend>pai_policy_io</exec_depend>
   <exec_depend>pai_rerun_visualizer</exec_depend>
   <exec_depend>pai_rviz_teleop</exec_depend>
   <exec_depend>pai_teleop_ik</exec_depend>
@@ -33,6 +35,7 @@
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>ros_gz_sim</exec_depend>
   <exec_depend>rosbridge_server</exec_depend>
+  <exec_depend>rosetta</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>so_arm100_description</exec_depend>
