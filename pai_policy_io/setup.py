@@ -21,5 +21,8 @@ setup(
         "rosetta.policy_runners": [
             "tensorlist = pai_policy_io.rosetta_bridge:TensorListBridgeRunner",
         ],
+        "console_scripts": [
+            "pai_export_act = pai_policy_io.export.cli:main",
+        ],
     },
 )

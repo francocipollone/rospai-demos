@@ -28,3 +28,6 @@ datasets_lerobot/*
 
 # wandb
 wandb
+
+# Exported policy models
+models/

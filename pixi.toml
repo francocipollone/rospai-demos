@@ -68,6 +68,9 @@ test-joints = { cmd = [
   "10",
 ]}
 
+# Policy I/O: export a LeRobot ACT checkpoint to model.onnx + policy_signature.yaml (pass the CLI flags after it).
+pai_export_act = { cmd = ["ros2", "run", "pai_policy_io", "pai_export_act"] }
+
 [dependencies]
 # Lint/Format
 pre-commit = "*"
