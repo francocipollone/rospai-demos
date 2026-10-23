@@ -21,6 +21,32 @@ TEST(TensorView, ItemsizeAndCount)
   EXPECT_EQ(element_count({}), 1);
 }
 
+TEST(TensorView, ElementCountRejectsNegativeDim)
+{
+  EXPECT_THROW(element_count({-1, -1}), std::invalid_argument);
+  EXPECT_THROW(element_count({3, -2}), std::invalid_argument);
+}
+
+TEST(TensorView, ElementCountRejectsOverflow)
+{
+  EXPECT_THROW(element_count({4611686018427387905LL, 4}), std::invalid_argument);
+}
+
+TEST(TensorView, ElementCountZeroSizeShape)
+{
+  EXPECT_EQ(element_count({0, 5}), 0);
+  EXPECT_EQ(element_count({5, 0}), 0);
+}
+
+TEST(TensorView, ViewOfRejectsNegativeShape)
+{
+  Tensor t;
+  t.dtype = 3;
+  t.shape = {-1, -1};
+  t.data.resize(4);
+  EXPECT_THROW(view_of(t), std::invalid_argument);
+}
+
 TEST(TensorView, DtypeFromString)
 {
   EXPECT_EQ(pai_policy_inference::dtype_from_string("uint8"), DType::UINT8);

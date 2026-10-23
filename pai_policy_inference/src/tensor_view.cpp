@@ -1,6 +1,8 @@
 #include "pai_policy_inference/tensor_view.hpp"
 
+#include <limits>
 #include <stdexcept>
+#include <string>
 
 namespace pai_policy_inference
 {
@@ -32,7 +34,17 @@ size_t itemsize(DType dtype)
 int64_t element_count(const std::vector<int64_t> & shape)
 {
   int64_t count = 1;
-  for (const auto dim : shape) {
+  for (size_t i = 0; i < shape.size(); ++i) {
+    const auto dim = shape[i];
+    if (dim < 0) {
+      throw std::invalid_argument(
+              "negative dimension " + std::to_string(dim) + " at index " + std::to_string(i));
+    }
+    if (dim != 0 && count > std::numeric_limits<int64_t>::max() / dim) {
+      throw std::invalid_argument(
+              "element count overflows int64 at dimension " + std::to_string(dim) +
+              " (index " + std::to_string(i) + ")");
+    }
     count *= dim;
   }
   return count;
