@@ -82,10 +82,12 @@ pixi.toml, pixi.lock                                              # Task 1
 ### Task 1: Dependencies and `pai_tensor_msgs`
 
 **Files:**
+
 - Modify: `pixi.toml` (dependencies table), `pixi.lock` (regenerated)
 - Create: `pai_tensor_msgs/package.xml`, `pai_tensor_msgs/CMakeLists.txt`, `pai_tensor_msgs/msg/Tensor.msg`, `pai_tensor_msgs/msg/TensorList.msg`, `pai_tensor_msgs/msg/PipelineInfo.msg`
 
 **Interfaces:**
+
 - Produces: `pai_tensor_msgs/msg/Tensor` `{string name; uint8 dtype; int64[] shape; uint8[] data}` with constants `DTYPE_UINT8=0 DTYPE_INT32=1 DTYPE_INT64=2 DTYPE_FLOAT32=3 DTYPE_FLOAT64=4 DTYPE_STRING=5`; `TensorList` `{std_msgs/Header header; Tensor[] tensors}`; `PipelineInfo` `{std_msgs/Header header; string signature_yaml; string pipeline_hash}`.
 - Decision: `data` is row-major, C-contiguous, native-endian; no strides field (spec Q3 default: hosted here until NVIDIA's `ExperimentalTensor` is adopted; in Lyrical `uint8[]` is already `rosidl::Buffer<uint8_t>` in C++, which satisfies G8). `DTYPE_STRING` stores UTF-8 bytes with `shape=[n_bytes]` (for `task`).
 
@@ -111,6 +113,7 @@ Expected: solve succeeds; `git diff --stat pixi.lock` shows additions; `pixi run
 - [ ] **Step 3: Write the message files**
 
 `msg/Tensor.msg`:
+
 ```
 # One named, dense, row-major tensor. See docs/design/policy-io-and-inference.md §5.
 uint8 DTYPE_UINT8=0
@@ -125,6 +128,7 @@ uint8 dtype      # one of DTYPE_*
 int64[] shape    # e.g. [480, 480, 3]; [] for a scalar
 uint8[] data     # C-contiguous, native endian; len == prod(shape) * itemsize
 ```
+
 `msg/TensorList.msg`: `std_msgs/Header header` (stamp = frame tick time), `Tensor[] tensors`.
 `msg/PipelineInfo.msg`: `std_msgs/Header header`, `string signature_yaml`, `string pipeline_hash`.
 
@@ -150,10 +154,12 @@ git commit -m "feat(pai_tensor_msgs): add Tensor, TensorList and PipelineInfo me
 ### Task 2: `pai_policy_io` package and the policy signature
 
 **Files:**
+
 - Create: `pai_policy_io/package.xml`, `setup.py`, `setup.cfg`, `resource/pai_policy_io`, `pai_policy_io/__init__.py`, `pai_policy_io/signature.py`
 - Test: `pai_policy_io/test/test_signature.py`, `pai_policy_io/test/fixtures/policy_signature_example.yaml` (the spec §5.7 example, verbatim, with `pipeline_hash: "sha256:0000"`)
 
 **Interfaces:**
+
 - Produces (`pai_policy_io/signature.py`):
   ```python
   SIGNATURE_VERSION = 1
@@ -231,10 +237,12 @@ git add pai_policy_io && git commit -m "feat(pai_policy_io): policy signature mo
 ### Task 3: SI contract and `signature_from_contract`
 
 **Files:**
+
 - Create: `pai_data_collection/config/rosetta/so_arm101_policy_io.yaml`, `pai_policy_io/pai_policy_io/contract_signature.py`
 - Test: `pai_policy_io/test/test_contract_signature.py`
 
 **Interfaces:**
+
 - Consumes: `PolicySignature`, `TensorSpec`, `ActionSpec` from Task 2; Rosetta `load_contract(path) -> Contract`, `iter_observation_specs(contract)`, `iter_action_specs(contract)` (`ObservationStreamSpec.key/.names/.is_image/.image_resize/.dtype`, `ActionStreamSpec.names`).
 - Produces:
   ```python
@@ -296,10 +304,12 @@ git commit -m "feat(pai_policy_io): derive the policy signature from the SI Rose
 ### Task 4: numpy ↔ `Tensor` conversion and the chunk follower
 
 **Files:**
+
 - Create: `pai_policy_io/pai_policy_io/tensor_msgs.py`, `pai_policy_io/pai_policy_io/chunk_follower.py`
 - Test: `pai_policy_io/test/test_tensor_msgs.py`, `pai_policy_io/test/test_chunk_follower.py`
 
 **Interfaces:**
+
 - Consumes: `pai_tensor_msgs.msg.Tensor`, `TensorList` (Task 1).
 - Produces (`tensor_msgs.py`):
   ```python
@@ -312,6 +322,7 @@ git commit -m "feat(pai_policy_io): derive the policy signature from the SI Rose
   def tensorlist_to_frame(msg: TensorList) -> dict[str, np.ndarray | str]
   ```
 - Produces (`chunk_follower.py`, no ROS):
+
   ```python
   class ChunkFollower:
       def __init__(self, action_dim: int, dt_ns: int): ...
@@ -322,6 +333,7 @@ git commit -m "feat(pai_policy_io): derive the policy signature from the SI Rose
       @property
       def t_obs_ns(self) -> int | None
   ```
+
   `push` is "replace": a newer chunk (larger `t_obs_ns`) replaces the current one; an older one is ignored and returns `False`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -384,20 +396,22 @@ git add pai_policy_io && git commit -m "feat(pai_policy_io): Tensor message conv
 ### Task 5: Rosetta bridge `PolicyRunner` (`framework: tensorlist`)
 
 **Files:**
+
 - Create: `pai_policy_io/pai_policy_io/rosetta_bridge.py`, `pai_data_collection/config/rosetta/policy_runner_tensorlist.yaml`
 - Modify: `pai_policy_io/setup.py` (entry point `rosetta.policy_runners: tensorlist = pai_policy_io.rosetta_bridge:TensorListBridgeRunner`)
 - Test: `pai_policy_io/test/test_rosetta_bridge.py`
 
 **Interfaces:**
+
 - Consumes: `FrameIO` (`sample_frame()`, `warmed_up`, `publish_frame({"action": np.ndarray})`), `PolicyRunner` protocol (`setup(node, contract)`, `run(frames, *, task, stop_event) -> RunnerResult`, `feedback() -> RunnerFeedback`, `request_stop()`, `teardown()`), `NodeLike` (`declare_parameter/has_parameter/get_parameter/get_logger`, plus the real node's `create_publisher`, `create_subscription`, `create_timer`, `get_clock`, `destroy_*`). `contract_pipeline_hash` (Task 3), `frame_to_tensorlist`, `tensorlist_to_frame`, `ChunkFollower` (Task 4).
 - Produces: `class TensorListBridgeRunner` with parameters (all read-only, declared with `has_parameter` guards):
 
-  | Parameter | Default |
-  | --- | --- |
-  | `observation_topic` | `/policy/observation` |
-  | `action_chunk_topic` | `/policy/action_chunk` |
+  | Parameter             | Default                 |
+  | --------------------- | ----------------------- |
+  | `observation_topic`   | `/policy/observation`   |
+  | `action_chunk_topic`  | `/policy/action_chunk`  |
   | `pipeline_info_topic` | `/policy/pipeline_info` |
-  | `robot` | `so_arm101` |
+  | `robot`               | `so_arm101`             |
 
   Behaviour: `setup()` builds `(signature, hash) = contract_pipeline_hash(contract_path, robot)`, creates publishers (observation: reliable, keep_last 1; pipeline info: reliable, transient_local, keep_last 1) and publishes one `PipelineInfo` (`signature_yaml = yaml.safe_dump(signature_to_dict(sig))`). `run()` resets a `ChunkFollower(len(sig.action.joints), 10**9 // fps)`, creates the chunk subscription (reliable, keep_last 1, own `MutuallyExclusiveCallbackGroup`) and a timer at `1/fps` (own `MutuallyExclusiveCallbackGroup`), then `stop_event.wait()`, destroys both, returns `RunnerResult(True, "Stopped")`. `_tick()`: skip until `frames.warmed_up`; `frame = frames.sample_frame()`; publish `frame_to_tensorlist(frame, now, casts={state keys: float32})` (drop keys not in `sig.observations`); `a = follower.action_at(now_ns)`; if `a is not None`: `frames.publish_frame({"action": a.astype(np.float64)})` and increment `published`. `_on_chunk(msg)`: `arrays = tensorlist_to_frame(msg)`; require `"action"` key; `follower.push(stamp_ns(msg.header), arrays["action"])`; log a throttled warning when `push` returns `False`. `feedback()` returns `RunnerFeedback(queue_depth=follower.remaining(now), published_actions=published)`. `request_stop()` is a no-op (the loop only waits on `stop_event`).
   - Decision: the timer-on-executor approach works because `policy_runner_node` spins a `MultiThreadedExecutor(num_threads=4)` (`rosetta/robots/ros2/nodes/node_utils.py`, `spin_lifecycle_node`), so `run()` may block while the timer and subscription callbacks keep firing.
@@ -434,6 +448,7 @@ Expected: FAIL with `ImportError`.
 - [ ] **Step 3: Implement `rosetta_bridge.py`, register the entry point, write `policy_runner_tensorlist.yaml`**
 
 Params file (mirrors `policy_runner.yaml`'s header comment style):
+
 ```yaml
 policy_runner:
   ros__parameters:
@@ -464,10 +479,12 @@ git commit -m "feat(pai_policy_io): Rosetta PolicyRunner bridge publishing Tenso
 ### Task 6: `pai_policy_inference` package: signature parsing and tensor views
 
 **Files:**
+
 - Create: `pai_policy_inference/package.xml`, `CMakeLists.txt`, `include/pai_policy_inference/signature.hpp`, `include/pai_policy_inference/tensor_view.hpp`, `src/signature.cpp`, `src/tensor_view.cpp`, `test/fixtures/policy_signature.yaml` (copy of the Task 2 fixture)
 - Test: `test/test_signature.cpp`, `test/test_tensor_view.cpp`
 
 **Interfaces:**
+
 - Consumes: `pai_tensor_msgs::msg::Tensor` (Task 1).
 - Produces (`namespace pai_policy_inference`):
   ```cpp
@@ -540,11 +557,13 @@ git add pai_policy_inference && git commit -m "feat(pai_policy_inference): signa
 ### Task 7: ONNX Runtime backend, `InferenceCore`, `LatestSlot`, `HashGate`
 
 **Files:**
+
 - Create: `include/pai_policy_inference/inference_backend.hpp`, `ort_backend.hpp`, `inference_core.hpp`, `src/ort_backend.cpp`, `src/inference_core.cpp`, `test/fixtures/make_fixture.py`, `test/fixtures/add_one.onnx`
 - Modify: `pai_policy_inference/CMakeLists.txt` (link `onnxruntime`, add tests)
 - Test: `test/test_inference_core.cpp`
 
 **Interfaces:**
+
 - Consumes: Task 6 types.
 - Produces:
   ```cpp
@@ -628,27 +647,30 @@ git add pai_policy_inference && git commit -m "feat(pai_policy_inference): ONNX 
 ### Task 8: Inference node (component + executable) and launch file
 
 **Files:**
+
 - Create: `include/pai_policy_inference/inference_node.hpp`, `src/inference_node.cpp`, `src/inference_node_main.cpp`, `pai_bringup/launch/policy_io_inference.launch.py`
 - Modify: `pai_policy_inference/CMakeLists.txt` (component library + `rclcpp_components_register_node`, executable `inference_node`), `pai_bringup/package.xml` (`<exec_depend>pai_policy_inference</exec_depend>`, `pai_policy_io`, `rosetta`)
 
 **Interfaces:**
+
 - Consumes: `InferenceCore`, `OrtBackend`, `LatestSlot`, `HashGate`, `load_signature` (Tasks 6–7).
 - Produces: `class InferenceNode : public rclcpp::Node` (component `pai_policy_inference::InferenceNode`, executable `inference_node`). Parameters:
 
-  | Parameter | Default | Meaning |
-  | --- | --- | --- |
-  | `model_dir` | `""` (required) | Directory with `model.onnx` and `policy_signature.yaml` |
-  | `backend` | `onnxruntime` | Only value accepted in this plan; others throw at startup |
-  | `provider` | `cpu` | `cpu` or `cuda` |
-  | `intra_op_threads` | `0` | ORT default |
-  | `observation_topic` | `/policy/observation` | |
-  | `action_chunk_topic` | `/policy/action_chunk` | |
-  | `pipeline_info_topic` | `/policy/pipeline_info` | transient_local subscription |
-  | `enforce_pipeline_hash` | `true` | `false` logs the mismatch at ERROR and continues |
-  | `pipeline_info_timeout_s` | `10.0` | Fail startup if no `PipelineInfo` arrives in time |
+  | Parameter                 | Default                 | Meaning                                                   |
+  | ------------------------- | ----------------------- | --------------------------------------------------------- |
+  | `model_dir`               | `""` (required)         | Directory with `model.onnx` and `policy_signature.yaml`   |
+  | `backend`                 | `onnxruntime`           | Only value accepted in this plan; others throw at startup |
+  | `provider`                | `cpu`                   | `cpu` or `cuda`                                           |
+  | `intra_op_threads`        | `0`                     | ORT default                                               |
+  | `observation_topic`       | `/policy/observation`   |                                                           |
+  | `action_chunk_topic`      | `/policy/action_chunk`  |                                                           |
+  | `pipeline_info_topic`     | `/policy/pipeline_info` | transient_local subscription                              |
+  | `enforce_pipeline_hash`   | `true`                  | `false` logs the mismatch at ERROR and continues          |
+  | `pipeline_info_timeout_s` | `10.0`                  | Fail startup if no `PipelineInfo` arrives in time         |
 
   Startup order in the constructor: load signature → build `OrtBackend` → `InferenceCore` → subscribe to `PipelineInfo` (reliable, transient_local, keep_last 1) and wait up to the timeout (a `rclcpp::WaitSet` on that subscription, so no executor is needed) → `HashGate(sig.pipeline_hash, enforce).check(received)` → log `RCLCPP_INFO` "model <dir>: horizon=H action_dim=D hash OK" → observation subscription (reliable, keep_last 1, pushes into `LatestSlot<TensorList::ConstSharedPtr>`) → publisher (reliable, keep_last 1) → worker `std::thread` loop: `take_blocking(100ms)` → `core.infer` → publish; `std::invalid_argument` from `infer` is logged with `RCLCPP_WARN_THROTTLE` (1 s) and the observation is skipped; `LatestSlot::dropped()` is logged at DEBUG every 100 drops. Destructor stops the worker.
   Startup errors throw `std::runtime_error`; `inference_node_main.cpp` catches, logs at FATAL, returns 1.
+
 - Launch file `policy_io_inference.launch.py` arguments: `model_dir` (required), `use_sim_time` (`false`), `provider` (`cpu`), `contract_path` (default `$(pai_data_collection share)/config/rosetta/so_arm101_policy_io.yaml`), `enforce_pipeline_hash` (`true`). Includes Rosetta's `policy_runner_launch.py` with `params_file:=.../policy_runner_tensorlist.yaml`, `contract_path`, `use_sim_time`, and starts `inference_node` with the parameters above.
 
 - [ ] **Step 1: Implement the node, main, CMake registration and launch file**
@@ -668,6 +690,7 @@ Expected: node exits 1 with `pipeline hash mismatch: model sha256:0000, pipeline
 - [ ] **Step 4: Verify inference on the fixture through topics**
 
 With the node up (hash `sha256:0000` published), run `pixi run ros2 topic echo /policy/action_chunk` and publish one observation from Python:
+
 ```bash
 pixi run python - <<'EOF'
 import rclpy, numpy as np
@@ -679,6 +702,7 @@ msg = frame_to_tensorlist({"observation.state": np.full(6, 1.5, np.float32), "ob
 import time; time.sleep(1.0); p.publish(msg); time.sleep(0.5); rclpy.shutdown()
 EOF
 ```
+
 Expected: one `TensorList` on `/policy/action_chunk` with `tensors[0].name: action`, `shape: [2, 6]`, 48 bytes of data, and the same `header.stamp` as the published observation.
 
 - [ ] **Step 5: Lint and commit**
@@ -694,11 +718,13 @@ git commit -m "feat(pai_policy_inference): inference node with hash gate and lat
 ### Task 9: ACT → ONNX exporter with baked normalisation, legacy units and equivalence check
 
 **Files:**
+
 - Create: `pai_policy_io/pai_policy_io/export/__init__.py`, `pai_policy_io/pai_policy_io/export/lerobot_act.py`, `pai_policy_io/pai_policy_io/export/cli.py`
 - Modify: `pai_policy_io/setup.py` (console script `pai_export_act = pai_policy_io.export.cli:main`)
 - Test: `pai_policy_io/test/test_export_lerobot_act.py`
 
 **Interfaces:**
+
 - Consumes: `PolicySignature`, `ExecutionSpec`, `dump_signature`, `dataclasses.replace` (Task 2); `contract_pipeline_hash` (Task 3). LeRobot 0.6.0: `ACTPolicy.from_pretrained(path)`, `policy.config.chunk_size`, `policy.config.image_features` (dict key → feature), `policy.config.normalization_mapping` (`FeatureType` → `NormalizationMode`), `make_pre_post_processors(policy.config, pretrained_path=path)` → `(preprocessor, postprocessor)`; the `NormalizerProcessorStep` inside `preprocessor.steps` exposes `state_dict()` with keys `"<feature>.<stat>"` (`mean`, `std`, `min`, `max`); `policy.predict_action_chunk(batch) -> [1, chunk, dim]`; `lerobot.utils.constants.OBS_STATE`, `OBS_IMAGES`, `ACTION`.
 - Produces (`lerobot_act.py`):
   ```python
@@ -772,6 +798,7 @@ Run: same command. Expected: 5 passed.
 - [ ] **Step 5: Export the real pretrained checkpoint and verify equivalence on recorded frames**
 
 Run:
+
 ```bash
 pixi run pai_export_act --pretrained francocipollone/rospai_act_sim_arm101_place_cubes_on_tray \
   --contract $(pixi run ros2 pkg prefix pai_data_collection)/share/pai_data_collection/config/rosetta/so_arm101_policy_io.yaml \
@@ -779,6 +806,7 @@ pixi run pai_export_act --pretrained francocipollone/rospai_act_sim_arm101_place
   --dataset francocipollone/rospai_sim_arm101_place_cubes_on_tray --check-frames 8 \
   --out models/act_so101
 ```
+
 Expected: prints `max abs error: <value> rad (atol 1e-3)` with value < 1e-3, the pipeline hash, and `models/act_so101/{model.onnx,policy_signature.yaml}` exist; `policy_signature.yaml` has `execution.horizon: 100` (the checkpoint's `chunk_size`; record the actual value in the commit message if different).
 
 - [ ] **Step 6: Add `models/` to `.gitignore`, lint and commit**
@@ -793,10 +821,12 @@ git add .gitignore pai_policy_io && git commit -m "feat(pai_policy_io): ACT to O
 ### Task 10: End-to-end run, docs and pixi task
 
 **Files:**
+
 - Create: `docs/demos/onnx-inference.md`
 - Modify: `pixi.toml` (`[tasks]`: `so-arm-onnx-inference`), `docs/README.md` and `README.md` (one row each pointing at the new guide), `README.md` packages table (three new packages)
 
 **Interfaces:**
+
 - Consumes: everything above. The pixi task: `so-arm-onnx-inference = { cmd = ["ros2", "launch", "pai_bringup", "policy_io_inference.launch.py", "model_dir:=${MODEL_DIR:-models/act_so101}", "use_sim_time:=true"] }` (verify pixi expands `${VAR:-default}` in `cmd` arrays; if not, drop the default and document `MODEL_DIR`).
 
 - [ ] **Step 1: Run the pretrained checkpoint through the new path in Gazebo**

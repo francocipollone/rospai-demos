@@ -1,10 +1,10 @@
 # Design: Policy I/O Convention and Inference Architecture
 
-| | |
-| --- | --- |
-| **Status** | Draft, for review |
-| **Scope** | How observations and actions are defined, recorded, trained on, and served for learned policies in this repository |
-| **Supersedes** | The Rosetta-based runtime path (`policy_runner_node` + LeRobot policy server) once fully migrated |
+|                |                                                                                                                                                                                                          |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Status**     | Draft, for review                                                                                                                                                                                        |
+| **Scope**      | How observations and actions are defined, recorded, trained on, and served for learned policies in this repository                                                                                       |
+| **Supersedes** | The Rosetta-based runtime path (`policy_runner_node` + LeRobot policy server) once fully migrated                                                                                                        |
 | **Background** | [`docs/research/policy-execution-and-buffer-backends.md`](../research/policy-execution-and-buffer-backends.md), [`docs/research/rosetta-inference-options.md`](../research/rosetta-inference-options.md) |
 
 ## 1. Summary
@@ -27,32 +27,32 @@ The dataset used for training **is a recording of the same observation topic** t
 
 The current deployment path is: Rosetta `policy_runner_node` → `LeRobotPolicyRunner` → LeRobot policy server subprocess over gRPC → `forward_position_controller`.
 
-| Problem | Consequence |
-| --- | --- |
-| The robot ↔ policy translation runs inside one Python node, configured by its own YAML language | Intermediate steps cannot be inspected, recorded or debugged with standard ROS tools |
-| Python and a gRPC hop sit in the control path | Control-rate commands are exposed to interpreter and IPC jitter |
-| Inference is tied to LeRobot's runtime | The inference engine cannot be swapped; NVIDIA, Intel and generic backends cannot share one deployment |
-| Action-chunk handling lives in LeRobot's Python client | Latency compensation, blending and stall behaviour are tied to one framework's runtime and run in Python at control rate |
-| Train/serve parity holds only while every component is Rosetta | Any alternative engine or C++ path must re-implement the translation and can silently diverge |
+| Problem                                                                                         | Consequence                                                                                                              |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| The robot ↔ policy translation runs inside one Python node, configured by its own YAML language | Intermediate steps cannot be inspected, recorded or debugged with standard ROS tools                                     |
+| Python and a gRPC hop sit in the control path                                                   | Control-rate commands are exposed to interpreter and IPC jitter                                                          |
+| Inference is tied to LeRobot's runtime                                                          | The inference engine cannot be swapped; NVIDIA, Intel and generic backends cannot share one deployment                   |
+| Action-chunk handling lives in LeRobot's Python client                                          | Latency compensation, blending and stall behaviour are tied to one framework's runtime and run in Python at control rate |
+| Train/serve parity holds only while every component is Rosetta                                  | Any alternative engine or C++ path must re-implement the translation and can silently diverge                            |
 
 ## 3. Goals and non-goals
 
 **Goals**
 
-| ID | Goal |
-| --- | --- |
-| G1 | **Parity.** A single convention, and a single implementation of every transform, shared by recording, dataset building and inference |
-| G2 | **Composition.** Every processing step is a node with typed topics, observable with standard ROS tools |
-| G3 | **Swappable inference.** The inference node's only interface is `TensorList` in, `TensorList` out |
-| G4 | **Vendor-neutral.** ONNX models with TensorRT, OpenVINO and ONNX Runtime backends behind the same node interface |
-| G5 | **No Python at control rate.** Inference rate is decoupled from control rate through action chunks |
-| G6 | **Safety close to the hardware.** Limits, non-finite guards and stall behaviour are enforced in the last stage before the controller, with `ros2_control` joint limits as a backstop |
-| G7 | **Training framework at the edges.** LeRobot (or any framework) only reads datasets and exports models |
-| G8 | **Zero-copy ready.** Tensors travel as `rosidl::Buffer`-backed messages so accelerator backends can be enabled later without interface changes |
+| ID  | Goal                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G1  | **Parity.** A single convention, and a single implementation of every transform, shared by recording, dataset building and inference                                                 |
+| G2  | **Composition.** Every processing step is a node with typed topics, observable with standard ROS tools                                                                               |
+| G3  | **Swappable inference.** The inference node's only interface is `TensorList` in, `TensorList` out                                                                                    |
+| G4  | **Vendor-neutral.** ONNX models with TensorRT, OpenVINO and ONNX Runtime backends behind the same node interface                                                                     |
+| G5  | **No Python at control rate.** Inference rate is decoupled from control rate through action chunks                                                                                   |
+| G6  | **Safety close to the hardware.** Limits, non-finite guards and stall behaviour are enforced in the last stage before the controller, with `ros2_control` joint limits as a backstop |
+| G7  | **Training framework at the edges.** LeRobot (or any framework) only reads datasets and exports models                                                                               |
+| G8  | **Zero-copy ready.** Tensors travel as `rosidl::Buffer`-backed messages so accelerator backends can be enabled later without interface changes                                       |
 
 **Non-goals (for this design)**
 
-- High-rate RL control policies evaluated *inside* a controller (hundreds of Hz, tiny networks). That is a separate component; see [§12](#12-alternatives-considered).
+- High-rate RL control policies evaluated _inside_ a controller (hundreds of Hz, tiny networks). That is a separate component; see [§12](#12-alternatives-considered).
 - Replacing LeRobot as the training framework. It stays; it is simply confined to the edges.
 - GPU pre-processing and accelerator buffer backends in the first iteration. The interfaces allow them; enabling them is a later phase.
 
@@ -114,13 +114,13 @@ The convention is enforced in four ways:
 
 Tensors are identified by **name**, never by position. Names are dotted keys:
 
-| Name | Meaning |
-| --- | --- |
-| `observation.images.<camera>` | One camera image, e.g. `observation.images.wrist` |
-| `observation.state` | Proprioceptive state vector |
-| `observation.<other>` | Any other observation, e.g. `observation.environment_state` |
-| `task` | Language instruction, for language-conditioned policies |
-| `action` | Action vector (recording) or action chunk (inference) |
+| Name                          | Meaning                                                     |
+| ----------------------------- | ----------------------------------------------------------- |
+| `observation.images.<camera>` | One camera image, e.g. `observation.images.wrist`           |
+| `observation.state`           | Proprioceptive state vector                                 |
+| `observation.<other>`         | Any other observation, e.g. `observation.environment_state` |
+| `task`                        | Language instruction, for language-conditioned policies     |
+| `action`                      | Action vector (recording) or action chunk (inference)       |
 
 The same names are used as `TensorList` entry names on topics, as dataset feature keys, and as ONNX graph input and output names. **The name is the join key across all three**, so there is no mapping table to keep in sync.
 
@@ -128,12 +128,12 @@ Within a vector tensor, the **element order is defined by the signature** ([§5.
 
 ### 5.3 Values and units
 
-| Tensor | Layout | dtype | Units / range |
-| --- | --- | --- | --- |
-| Images | HWC, RGB | `uint8` | 0–255, at the resolution declared in the signature |
-| State and action vectors | 1-D, signature order | `float32` | **SI units per REP 103**: radians for revolute joints, metres for prismatic joints and positions |
-| Gripper | Element of the vector | `float32` | Joint position in SI units, like any other joint |
-| `task` | String | — | UTF-8 |
+| Tensor                   | Layout                | dtype     | Units / range                                                                                    |
+| ------------------------ | --------------------- | --------- | ------------------------------------------------------------------------------------------------ |
+| Images                   | HWC, RGB              | `uint8`   | 0–255, at the resolution declared in the signature                                               |
+| State and action vectors | 1-D, signature order  | `float32` | **SI units per REP 103**: radians for revolute joints, metres for prismatic joints and positions |
+| Gripper                  | Element of the vector | `float32` | Joint position in SI units, like any other joint                                                 |
+| `task`                   | String                | —         | UTF-8                                                                                            |
 
 **Decision: SI units, not degrees.** LeRobot's SO-101 convention and our existing Rosetta contract use degrees. This convention uses radians, so every ROS-side quantity passes through untouched and no unit operator exists anywhere in the pipeline. Legacy degree-based datasets and checkpoints are handled once, at the model boundary: the ONNX export of a legacy checkpoint bakes `rad→deg` into its inputs and `deg→rad` into its outputs ([§11](#11-migration-plan)). They are never handled in the pipeline.
 
@@ -141,22 +141,22 @@ Within a vector tensor, the **element order is defined by the signature** ([§5.
 
 ### 5.4 Time
 
-| Concept | Definition |
-| --- | --- |
-| **Frame clock** | A fixed rate `fps` declared in the signature. One observation `TensorList` is published per tick, on the ROS clock, so sim time works. For SO-ARM101 today this is 50 Hz, matching the `ros2_control` update rate. |
-| **Observation stamp** | `TensorList.header.stamp` is the **frame tick time** the observation was sampled for. It is also the time origin of the action chunk computed from it. |
-| **Source stamps** | Each component preserves the stamp of its input message (`header.stamp`, or receive time for header-less types). The synchronizer aligns on these stamps. |
+| Concept               | Definition                                                                                                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Frame clock**       | A fixed rate `fps` declared in the signature. One observation `TensorList` is published per tick, on the ROS clock, so sim time works. For SO-ARM101 today this is 50 Hz, matching the `ros2_control` update rate. |
+| **Observation stamp** | `TensorList.header.stamp` is the **frame tick time** the observation was sampled for. It is also the time origin of the action chunk computed from it.                                                             |
+| **Source stamps**     | Each component preserves the stamp of its input message (`header.stamp`, or receive time for header-less types). The synchronizer aligns on these stamps.                                                          |
 
 ### 5.5 Alignment, warmup and missing data
 
 The frame synchronizer turns asynchronous streams into one tensor list per tick:
 
-| Rule | Behaviour |
-| --- | --- |
-| **Alignment** | Per stream: `hold` (latest value, any age) or `asof` with a tolerance. The policy per stream is declared in the pipeline configuration. |
-| **Warmup** | Nothing is published until every observation stream has delivered at least one sample. |
-| **Missing data after warmup** | A stream with no valid sample under its alignment rule is **zero-filled** at its declared shape, and the gap is logged. |
-| **Clock reset** | A source stamp more than 1 s ahead of the tick is treated as a clock reset (sim restart, bag loop) and clears that stream's buffer. |
+| Rule                          | Behaviour                                                                                                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Alignment**                 | Per stream: `hold` (latest value, any age) or `asof` with a tolerance. The policy per stream is declared in the pipeline configuration. |
+| **Warmup**                    | Nothing is published until every observation stream has delivered at least one sample.                                                  |
+| **Missing data after warmup** | A stream with no valid sample under its alignment rule is **zero-filled** at its declared shape, and the gap is logged.                 |
+| **Clock reset**               | A source stamp more than 1 s ahead of the tick is treated as a clock reset (sim restart, bag loop) and clears that stream's buffer.     |
 
 These rules apply identically in recording and inference, because they are the same component.
 
@@ -168,16 +168,16 @@ These rules apply identically in recording and inference, because they are the s
 
 > **Chunk timing rule:** `action[i]` is the target for time `t_obs + i · dt`, where `t_obs` is the chunk's `header.stamp` and `dt = 1 / fps`.
 
-This is the same pairing as in the dataset: the action recorded at tick *t* is paired with the observation sampled at tick *t*. A policy trained on that pairing predicts `action[0]` for the observation's own tick.
+This is the same pairing as in the dataset: the action recorded at tick _t_ is paired with the observation sampled at tick _t_. A policy trained on that pairing predicts `action[0]` for the observation's own tick.
 
 **Action types.** v1 supports **absolute joint positions**. The signature reserves `action_type` for later `delta_joint` (relative to the state at `t_obs`) and `ee_pose` (fed to a downstream Cartesian or IK controller).
 
 **Per-dimension kind.** Each action element declares a kind that governs interpolation and blending:
 
-| Kind | Interpolation and blending |
-| --- | --- |
-| `continuous` | Linear interpolation; weighted average when blending |
-| `binary` | No interpolation; switch at the midpoint; when blending, majority by weight |
+| Kind                         | Interpolation and blending                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `continuous`                 | Linear interpolation; weighted average when blending                         |
+| `binary`                     | No interpolation; switch at the midpoint; when blending, majority by weight  |
 | `quaternion` / `rotation_6d` | Rotation-aware (slerp) interpolation and averaging (reserved, for `ee_pose`) |
 
 ### 5.7 Policy signature
@@ -191,28 +191,45 @@ robot: so_arm101
 fps: 50
 
 observations:
-  observation.images.wrist:  { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
-  observation.images.static: { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
+  observation.images.wrist:
+    { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
+  observation.images.static:
+    { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
   observation.state:
     dtype: float32
     units: si
-    joints: [shoulder_pan_joint, shoulder_lift_joint, elbow_flex_joint,
-             wrist_flex_joint, wrist_roll_joint, gripper_joint]
+    joints:
+      [
+        shoulder_pan_joint,
+        shoulder_lift_joint,
+        elbow_flex_joint,
+        wrist_flex_joint,
+        wrist_roll_joint,
+        gripper_joint,
+      ]
 
 action:
   dtype: float32
   units: si
   action_type: absolute_joint
-  joints: [shoulder_pan_joint, shoulder_lift_joint, elbow_flex_joint,
-           wrist_flex_joint, wrist_roll_joint, gripper_joint]
-  kinds: [continuous, continuous, continuous, continuous, continuous, continuous]
+  joints:
+    [
+      shoulder_pan_joint,
+      shoulder_lift_joint,
+      elbow_flex_joint,
+      wrist_flex_joint,
+      wrist_roll_joint,
+      gripper_joint,
+    ]
+  kinds:
+    [continuous, continuous, continuous, continuous, continuous, continuous]
 
 # Present on exported models only (set by the exporter, not by recording):
 execution:
-  horizon: 100            # chunk length the model emits
-  execute_steps: 30       # how many to use before the next chunk is preferred
-  strategy: blend         # replace | blend | temporal_ensemble
-  max_staleness_s: 0.2    # chunks older than this at arrival are rejected
+  horizon: 100 # chunk length the model emits
+  execute_steps: 30 # how many to use before the next chunk is preferred
+  strategy: blend # replace | blend | temporal_ensemble
+  max_staleness_s: 0.2 # chunks older than this at arrival are rejected
 
 pipeline_hash: "sha256:…" # see §5.8
 ```
@@ -231,12 +248,12 @@ The **pipeline hash** is a SHA-256 over:
 - the pre-processing pipeline configuration (component types, their parameters, alignment rules);
 - the versions of the component libraries.
 
-| Artifact | Carries |
-| --- | --- |
-| Episode bag | Pipeline configuration + hash, as bag metadata |
-| Dataset | `policy_signature.yaml` + hash in the dataset's metadata |
-| Exported model | `policy_signature.yaml` (with `execution`) + hash |
-| Running pipeline | Computes its own hash at startup |
+| Artifact         | Carries                                                  |
+| ---------------- | -------------------------------------------------------- |
+| Episode bag      | Pipeline configuration + hash, as bag metadata           |
+| Dataset          | `policy_signature.yaml` + hash in the dataset's metadata |
+| Exported model   | `policy_signature.yaml` (with `execution`) + hash        |
+| Running pipeline | Computes its own hash at startup                         |
 
 On startup, the inference node compares the model's hash with the hash published by the running pipeline. A mismatch is a hard error, not a warning. An explicit override parameter exists for experiments, and it is logged loudly.
 
@@ -244,12 +261,12 @@ On startup, the inference node compares the model's hash with the hash published
 
 All components are C++ libraries with thin composable-node wrappers. They use stamped tensor messages and support `rosidl::Buffer` storage. **The library is the unit of parity:** the live node and the replay host both call it.
 
-| Component | Input | Output | Responsibilities |
-| --- | --- | --- | --- |
-| **Image** | `sensor_msgs/Image` or `CompressedImage` | Stamped image tensor | Decode to RGB `uint8` HWC (all supported encodings, `bgr8` included). Resize to the signature resolution with the **reference resize convention** below. Reject depth encodings until supported. |
-| **Joint** | `sensor_msgs/JointState` (or a configured message type) | Stamped `float32` vector | Select fields **by joint name** in signature order. Drop and log messages missing a joint. No unit conversion (SI in, SI out). |
-| **Action** | The shared command topic: `/forward_position_controller/commands` (`std_msgs/Float64MultiArray`) | Stamped `float32` vector | `Float64MultiArray` carries no joint names and no header, so the element order comes from configuration (the controller's `joints` parameter, verified against the signature's `action.joints` at startup) and the stamp is the receive time. |
-| **Frame synchronizer** | The stamped tensors above | `/policy/observation` `TensorList`, and `/policy/action` during recording | Alignment, warmup, zero-fill, clock-reset handling ([§5.5](#55-alignment-warmup-and-missing-data)). Stamps each list with the tick time. |
+| Component              | Input                                                                                            | Output                                                                    | Responsibilities                                                                                                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Image**              | `sensor_msgs/Image` or `CompressedImage`                                                         | Stamped image tensor                                                      | Decode to RGB `uint8` HWC (all supported encodings, `bgr8` included). Resize to the signature resolution with the **reference resize convention** below. Reject depth encodings until supported.                                              |
+| **Joint**              | `sensor_msgs/JointState` (or a configured message type)                                          | Stamped `float32` vector                                                  | Select fields **by joint name** in signature order. Drop and log messages missing a joint. No unit conversion (SI in, SI out).                                                                                                                |
+| **Action**             | The shared command topic: `/forward_position_controller/commands` (`std_msgs/Float64MultiArray`) | Stamped `float32` vector                                                  | `Float64MultiArray` carries no joint names and no header, so the element order comes from configuration (the controller's `joints` parameter, verified against the signature's `action.joints` at startup) and the stamp is the receive time. |
+| **Frame synchronizer** | The stamped tensors above                                                                        | `/policy/observation` `TensorList`, and `/policy/action` during recording | Alignment, warmup, zero-fill, clock-reset handling ([§5.5](#55-alignment-warmup-and-missing-data)). Stamps each list with the tick time.                                                                                                      |
 
 **Reference resize convention.** Nearest-neighbour sampling with source indices `round_half_even(linspace(0, n−1, rn))`. This is the convention used by Rosetta, so the new pipeline can be verified against frames from our existing datasets ([§10](#10-testing-and-verification)). Implementations must not substitute `cv::resize` or `std::round`. Any future interpolation mode is a new, separately named and versioned option, never a silent change.
 
@@ -257,15 +274,15 @@ All components are C++ libraries with thin composable-node wrappers. They use st
 
 ### 7.1 Inference node
 
-| Aspect | Behaviour |
-| --- | --- |
-| Interface | Subscribes `/policy/observation` (`TensorList`), publishes `/policy/action_chunk` (`TensorList`) |
-| Backends | ONNX Runtime (any platform), OpenVINO (Intel CPU/GPU/XPU), TensorRT (NVIDIA), selected by parameter. Same model artifact for all. |
-| Input binding | By name: `TensorList` entry name = ONNX input name |
-| Scheduling | At most one inference in flight. A newer observation replaces a pending one (latest-only), so slow models never build a queue of stale inputs. |
-| Output | `action` chunk `[horizon, action_dim]`; `header.stamp` = the input observation's stamp |
-| Startup checks | Signature compatibility and pipeline hash ([§5.8](#58-pipeline-hash-and-provenance)) |
-| Robot knowledge | None. It does not know joint names, units or controllers. |
+| Aspect          | Behaviour                                                                                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Interface       | Subscribes `/policy/observation` (`TensorList`), publishes `/policy/action_chunk` (`TensorList`)                                               |
+| Backends        | ONNX Runtime (any platform), OpenVINO (Intel CPU/GPU/XPU), TensorRT (NVIDIA), selected by parameter. Same model artifact for all.              |
+| Input binding   | By name: `TensorList` entry name = ONNX input name                                                                                             |
+| Scheduling      | At most one inference in flight. A newer observation replaces a pending one (latest-only), so slow models never build a queue of stale inputs. |
+| Output          | `action` chunk `[horizon, action_dim]`; `header.stamp` = the input observation's stamp                                                         |
+| Startup checks  | Signature compatibility and pipeline hash ([§5.8](#58-pipeline-hash-and-provenance))                                                           |
+| Robot knowledge | None. It does not know joint names, units or controllers.                                                                                      |
 
 ### 7.2 Model artifact
 
@@ -338,12 +355,12 @@ The executor is not specific to ACT. It serves any chunked policy (Diffusion Pol
 
 ### 9.2 Trade-offs of executing at node level
 
-| Aspect | Node level (this design) | Mitigation |
-| --- | --- | --- |
-| Timing | Driven by a ROS timer, not the `ros2_control` real-time loop; jitter in the low milliseconds | Acceptable at 50 Hz for this arm. Today a Python client does the same job with more jitter. |
-| Extra hop | One small message (6 `float64`) per tick to the controller | Negligible |
-| Process failure | The node can crash | `ForwardCommandController` keeps its last command, so the arm holds. This matches today's behaviour. |
-| Limits backstop | Limits are enforced in a non-real-time node | Enable `enforce_command_limits` in [`ros2_controllers.yaml`](../../pai_bringup/config/control/ros2_controllers.yaml) (currently `false`) with joint limits from the robot description, so `ros2_control` still clamps commands if the node misbehaves |
+| Aspect          | Node level (this design)                                                                     | Mitigation                                                                                                                                                                                                                                            |
+| --------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Timing          | Driven by a ROS timer, not the `ros2_control` real-time loop; jitter in the low milliseconds | Acceptable at 50 Hz for this arm. Today a Python client does the same job with more jitter.                                                                                                                                                           |
+| Extra hop       | One small message (6 `float64`) per tick to the controller                                   | Negligible                                                                                                                                                                                                                                            |
+| Process failure | The node can crash                                                                           | `ForwardCommandController` keeps its last command, so the arm holds. This matches today's behaviour.                                                                                                                                                  |
+| Limits backstop | Limits are enforced in a non-real-time node                                                  | Enable `enforce_command_limits` in [`ros2_controllers.yaml`](../../pai_bringup/config/control/ros2_controllers.yaml) (currently `false`) with joint limits from the robot description, so `ros2_control` still clamps commands if the node misbehaves |
 
 What this choice buys: **one action path for teleoperation and inference** ([§5.1](#51-the-parity-rule)), blending from the first version, and no dependency on controller-specific behaviour.
 
@@ -353,64 +370,64 @@ If real-time execution, a control rate above `fps`, or tighter coupling with har
 
 ### 9.4 Safety responsibilities
 
-| Guard | Where |
-| --- | --- |
-| Non-finite actions | Action executor rejects the chunk |
-| Joint limits | Action executor (primary), `ros2_control` `enforce_command_limits` (backstop); limits come from the robot description, not from a pipeline-level clamp |
-| Inference stall | Action executor holds or decelerates when no chunk covers the current time |
-| Stale chunks | Action executor rejects chunks older than `max_staleness_s` |
-| Executor crash | `ForwardCommandController` holds the last command |
-| Missing sensor data | Synchronizer withholds output until warmup; zero-fills and logs after it |
-| Model/pipeline mismatch | Inference node refuses to start on hash or signature mismatch |
+| Guard                   | Where                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Non-finite actions      | Action executor rejects the chunk                                                                                                                      |
+| Joint limits            | Action executor (primary), `ros2_control` `enforce_command_limits` (backstop); limits come from the robot description, not from a pipeline-level clamp |
+| Inference stall         | Action executor holds or decelerates when no chunk covers the current time                                                                             |
+| Stale chunks            | Action executor rejects chunks older than `max_staleness_s`                                                                                            |
+| Executor crash          | `ForwardCommandController` holds the last command                                                                                                      |
+| Missing sensor data     | Synchronizer withholds output until warmup; zero-fills and logs after it                                                                               |
+| Model/pipeline mismatch | Inference node refuses to start on hash or signature mismatch                                                                                          |
 
 ## 10. Testing and verification
 
-| Test | Purpose | When |
-| --- | --- | --- |
-| **Component golden tests** | Each component against fixed inputs and expected outputs (including resize edge cases and rounding ties) | Every change |
-| **Executor library tests** | Time selection, each `strategy`, each `kind`, staleness, stall behaviour and limits, without ROS | Every change |
-| **Rosetta oracle tests** | New components vs Rosetta's frames (`iter_bag_frames`) on existing episode bags, adjusting for the documented unit change. This proves the new pipeline reproduces our current datasets. | During migration |
-| **Replay determinism** | Replaying the same raw bag twice yields bit-identical tensors and hashes | Every change to the replay host or components |
-| **Export equivalence** | ONNX vs framework checkpoint on recorded frames, within tolerance | Every export |
-| **End-to-end replay** | Recorded episode through pipeline → inference → executor; commands match a reference run | Release |
-| **Hash enforcement** | A model from a different pipeline configuration fails to start | Every change |
+| Test                       | Purpose                                                                                                                                                                                  | When                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **Component golden tests** | Each component against fixed inputs and expected outputs (including resize edge cases and rounding ties)                                                                                 | Every change                                  |
+| **Executor library tests** | Time selection, each `strategy`, each `kind`, staleness, stall behaviour and limits, without ROS                                                                                         | Every change                                  |
+| **Rosetta oracle tests**   | New components vs Rosetta's frames (`iter_bag_frames`) on existing episode bags, adjusting for the documented unit change. This proves the new pipeline reproduces our current datasets. | During migration                              |
+| **Replay determinism**     | Replaying the same raw bag twice yields bit-identical tensors and hashes                                                                                                                 | Every change to the replay host or components |
+| **Export equivalence**     | ONNX vs framework checkpoint on recorded frames, within tolerance                                                                                                                        | Every export                                  |
+| **End-to-end replay**      | Recorded episode through pipeline → inference → executor; commands match a reference run                                                                                                 | Release                                       |
+| **Hash enforcement**       | A model from a different pipeline configuration fails to start                                                                                                                           | Every change                                  |
 
 ## 11. Migration plan
 
 Each phase is useful on its own and has an exit criterion.
 
-| Phase | Work | Exit criterion |
-| --- | --- | --- |
-| **0. Specify** | Agree this document. Obtain the `TensorList` definition (NVIDIA; start in this repo). Upstream `rmw_zenoh_cpp` ≥ 0.10.5 to RoboStack. | Document approved; message package exists |
-| **1. Inference node + export** | Generic inference node (ORT first). ACT → ONNX exporter with baked normalisation and legacy `deg↔rad` wrapping. Temporary bridge: a Rosetta `PolicyRunner` publishing Rosetta frames as `TensorList` and consuming chunks. | Pretrained checkpoint drives the arm through the new node with no regression |
-| **2. Action executor** | Executor library and node ([§9.1](#91-action-executor-node)); enable `enforce_command_limits`. Retire LeRobot's client-side chunk queue. | Pretrained checkpoint runs with the executor; executor library tests pass |
-| **3. Pre-processing components** | Image, joint and synchronizer components; Rosetta oracle tests green. Rosetta no longer runs at deployment. | Oracle tests pass on all existing bags |
-| **4. Data pipeline** | Recording of convention tensors, transform-free converter, replay host, pipeline hash end to end. Rosetta retired from recording. | A model trained on new data deploys with hash verification |
-| **5. Acceleration** | GPU pre-processing, `rosidl::Buffer` accelerator backends, TensorRT/OpenVINO tuning | Measured improvement on target hardware |
+| Phase                            | Work                                                                                                                                                                                                                       | Exit criterion                                                               |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **0. Specify**                   | Agree this document. Obtain the `TensorList` definition (NVIDIA; start in this repo). Upstream `rmw_zenoh_cpp` ≥ 0.10.5 to RoboStack.                                                                                      | Document approved; message package exists                                    |
+| **1. Inference node + export**   | Generic inference node (ORT first). ACT → ONNX exporter with baked normalisation and legacy `deg↔rad` wrapping. Temporary bridge: a Rosetta `PolicyRunner` publishing Rosetta frames as `TensorList` and consuming chunks. | Pretrained checkpoint drives the arm through the new node with no regression |
+| **2. Action executor**           | Executor library and node ([§9.1](#91-action-executor-node)); enable `enforce_command_limits`. Retire LeRobot's client-side chunk queue.                                                                                   | Pretrained checkpoint runs with the executor; executor library tests pass    |
+| **3. Pre-processing components** | Image, joint and synchronizer components; Rosetta oracle tests green. Rosetta no longer runs at deployment.                                                                                                                | Oracle tests pass on all existing bags                                       |
+| **4. Data pipeline**             | Recording of convention tensors, transform-free converter, replay host, pipeline hash end to end. Rosetta retired from recording.                                                                                          | A model trained on new data deploys with hash verification                   |
+| **5. Acceleration**              | GPU pre-processing, `rosidl::Buffer` accelerator backends, TensorRT/OpenVINO tuning                                                                                                                                        | Measured improvement on target hardware                                      |
 
 Legacy data: existing Rosetta-era bags are re-processed through the replay host (phase 4). The existing pretrained checkpoint keeps working through its ONNX export with baked unit conversion (phase 1).
 
 ## 12. Alternatives considered
 
-| Alternative | Why not chosen |
-| --- | --- |
-| **Keep Rosetta as the runtime**, with a custom `PolicyRunner` | Keeps parity, but the pipeline stays inside one Python node: fails G2 and G5. Used here only as a temporary bridge (phase 1). |
-| **Compile Rosetta's contract into a ROS graph** | Close to this design. It depends on an upstream redesign of Rosetta and keeps its YAML language as the source of truth. This design reaches the same structure with standard launch configuration and the signature, and it can still be proposed upstream. |
-| **Rosetta offline, separately configured deployment graph** | Two definitions and two implementations of the transforms, kept honest only by tests: violates G1. |
-| **`ros2_policy_execution_pipeline` (PEP) as the framework** | Synchronous inference on the control timer, no chunk support, pre-release API. Its preprocess → infer → postprocess → execute split is reflected here as separate nodes; revisit if its async story lands upstream. |
-| **Isaac ROS as a dependency** | Same architectural pattern, but NVIDIA-only (fails G4) and not on RoboStack. Used as a design reference; its `TensorList` work is adopted. |
-| **Chunk → `JointTrajectory` adapter + `joint_trajectory_controller`** | Mature interpolation and limits, but only the `replace` strategy, and teleoperation would go through a different controller than inference: violates the shared action path ([§5.1](#51-the-parity-rule)) |
-| **Action-chunk controller in `ros2_control` from the start** | Real-time execution, but more work up front and not needed at 50 Hz. Kept as a future host for the same library ([§9.3](#93-future-controller-wrapper)). |
-| **Inference inside a controller** | Right for tiny high-rate RL policies; wrong for imitation policies and VLAs, whose forward pass must never block a real-time update. Out of scope (see non-goals). |
+| Alternative                                                           | Why not chosen                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Keep Rosetta as the runtime**, with a custom `PolicyRunner`         | Keeps parity, but the pipeline stays inside one Python node: fails G2 and G5. Used here only as a temporary bridge (phase 1).                                                                                                                               |
+| **Compile Rosetta's contract into a ROS graph**                       | Close to this design. It depends on an upstream redesign of Rosetta and keeps its YAML language as the source of truth. This design reaches the same structure with standard launch configuration and the signature, and it can still be proposed upstream. |
+| **Rosetta offline, separately configured deployment graph**           | Two definitions and two implementations of the transforms, kept honest only by tests: violates G1.                                                                                                                                                          |
+| **`ros2_policy_execution_pipeline` (PEP) as the framework**           | Synchronous inference on the control timer, no chunk support, pre-release API. Its preprocess → infer → postprocess → execute split is reflected here as separate nodes; revisit if its async story lands upstream.                                         |
+| **Isaac ROS as a dependency**                                         | Same architectural pattern, but NVIDIA-only (fails G4) and not on RoboStack. Used as a design reference; its `TensorList` work is adopted.                                                                                                                  |
+| **Chunk → `JointTrajectory` adapter + `joint_trajectory_controller`** | Mature interpolation and limits, but only the `replace` strategy, and teleoperation would go through a different controller than inference: violates the shared action path ([§5.1](#51-the-parity-rule))                                                   |
+| **Action-chunk controller in `ros2_control` from the start**          | Real-time execution, but more work up front and not needed at 50 Hz. Kept as a future host for the same library ([§9.3](#93-future-controller-wrapper)).                                                                                                    |
+| **Inference inside a controller**                                     | Right for tiny high-rate RL policies; wrong for imitation policies and VLAs, whose forward pass must never block a real-time update. Out of scope (see non-goals).                                                                                          |
 
 ## 13. Open questions
 
-| # | Question | Default until decided |
-| --- | --- | --- |
-| Q1 | Which model families are in scope (ACT only, or VLAs such as SmolVLA and π0)? This decides whether a `task` tokenisation path is needed early, and which executor strategies to validate first. | ACT first; design keeps VLAs possible |
-| Q2 | Vendor targets: NVIDIA and Intel XPU both first-class? | Yes: ORT first, then OpenVINO and TensorRT |
-| Q3 | Final `TensorList` / `ExperimentalTensor` definitions and package location | NVIDIA's proposal, hosted in this repo until upstreamed |
-| Q4 | Zero-fill vs an explicit per-stream validity mask in the observation | Zero-fill (matches existing datasets); a mask can be added as `observation.valid` later |
-| Q5 | Propose this design to Rosetta upstream before phase 3? | Yes, in parallel; the plan does not depend on it |
-| Q6 | Confirm SI units over degrees ([§5.3](#53-values-and-units)) | SI |
-| Q7 | Does the robot description carry complete joint limits (position, velocity) for `enforce_command_limits` ([§9.2](#92-trade-offs-of-executing-at-node-level))? | To be verified in `ros2_so_arm`'s URDF |
+| #   | Question                                                                                                                                                                                        | Default until decided                                                                   |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Q1  | Which model families are in scope (ACT only, or VLAs such as SmolVLA and π0)? This decides whether a `task` tokenisation path is needed early, and which executor strategies to validate first. | ACT first; design keeps VLAs possible                                                   |
+| Q2  | Vendor targets: NVIDIA and Intel XPU both first-class?                                                                                                                                          | Yes: ORT first, then OpenVINO and TensorRT                                              |
+| Q3  | Final `TensorList` / `ExperimentalTensor` definitions and package location                                                                                                                      | NVIDIA's proposal, hosted in this repo until upstreamed                                 |
+| Q4  | Zero-fill vs an explicit per-stream validity mask in the observation                                                                                                                            | Zero-fill (matches existing datasets); a mask can be added as `observation.valid` later |
+| Q5  | Propose this design to Rosetta upstream before phase 3?                                                                                                                                         | Yes, in parallel; the plan does not depend on it                                        |
+| Q6  | Confirm SI units over degrees ([§5.3](#53-values-and-units))                                                                                                                                    | SI                                                                                      |
+| Q7  | Does the robot description carry complete joint limits (position, velocity) for `enforce_command_limits` ([§9.2](#92-trade-offs-of-executing-at-node-level))?                                   | To be verified in `ros2_so_arm`'s URDF                                                  |

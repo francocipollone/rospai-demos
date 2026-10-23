@@ -25,15 +25,15 @@ Every section of the 0.2.0 changelog marked **Breaking** touches this repository
 
 Rosetta 0.2.0 split one package into three layers:
 
-| Layer | Modules | May import |
-| --- | --- | --- |
-| Core | `rosetta.contract`, `rosetta.frames`, `rosetta.policies` | Nothing robot- or ML-specific. No `rclpy`, no `*_msgs`, no `torch`/`lerobot` |
-| Robot adapter | `rosetta.robots.ros2.*` | ROS 2 |
-| Framework adapter | **`lerobot_rosetta`** (separate package) | LeRobot |
+| Layer             | Modules                                                  | May import                                                                   |
+| ----------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Core              | `rosetta.contract`, `rosetta.frames`, `rosetta.policies` | Nothing robot- or ML-specific. No `rclpy`, no `*_msgs`, no `torch`/`lerobot` |
+| Robot adapter     | `rosetta.robots.ros2.*`                                  | ROS 2                                                                        |
+| Framework adapter | **`lerobot_rosetta`** (separate package)                 | LeRobot                                                                      |
 
 Two consequences drive most of the migration work:
 
-**The contract declares its robot interface.** `robot_interface: ros2` is a new required top-level field. `ros2` is the only value today, but the schema no longer presumes it: alignment timelines are *open names that the interface attests to* (`receive` for every ROS 2 channel, `header` additionally for message types carrying a `std_msgs/Header`) rather than a fixed enum. Naming a timeline a channel does not provide is a load-time error.
+**The contract declares its robot interface.** `robot_interface: ros2` is a new required top-level field. `ros2` is the only value today, but the schema no longer presumes it: alignment timelines are _open names that the interface attests to_ (`receive` for every ROS 2 channel, `header` additionally for message types carrying a `std_msgs/Header`) rather than a fixed enum. Naming a timeline a channel does not provide is a load-time error.
 
 **Learning frameworks resolve by entry point, not by import.** `rosetta.dataset_writers` and `rosetta.policy_runners` are the groups; `lerobot_rosetta` registers under the name `lerobot` in both. `rosetta_port --framework` and `policy_runner_node`'s `framework` parameter select one by name. Codecs and operators became open registries too (`rosetta.codecs`, `rosetta.operators`), so supporting a new message type is a third-party entry point rather than a fork.
 
@@ -41,26 +41,26 @@ The practical payoff for us is narrow but real: `rosetta` core is now importable
 
 ### 1.2 The package set grew to five
 
-| Package | Role | Status here |
-| --- | --- | --- |
-| `rosetta` | Core library, ROS 2 nodes, bag conversion | pinned — bump. **Build type changed `ament_cmake` → `ament_python`** |
-| `rosetta_interfaces` | Actions and services | pinned — bump |
-| `lerobot_robot_rosetta` | LeRobot `Robot` plugin (`--robot.type=rosetta`) | pinned — bump |
-| **`lerobot_rosetta`** | **LeRobot framework adapter: dataset writer, policy runner, gRPC inference servers** | **NEW — must be added** |
-| `lerobot_teleoperator_rosetta` | LeRobot `Teleoperator` plugin, experimental | skip (HIL only) |
+| Package                        | Role                                                                                 | Status here                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `rosetta`                      | Core library, ROS 2 nodes, bag conversion                                            | pinned — bump. **Build type changed `ament_cmake` → `ament_python`** |
+| `rosetta_interfaces`           | Actions and services                                                                 | pinned — bump                                                        |
+| `lerobot_robot_rosetta`        | LeRobot `Robot` plugin (`--robot.type=rosetta`)                                      | pinned — bump                                                        |
+| **`lerobot_rosetta`**          | **LeRobot framework adapter: dataset writer, policy runner, gRPC inference servers** | **NEW — must be added**                                              |
+| `lerobot_teleoperator_rosetta` | LeRobot `Teleoperator` plugin, experimental                                          | skip (HIL only)                                                      |
 
 `lerobot_rosetta` is not optional. It holds everything that used to live inside `rosetta` on the LeRobot side, so without it `rosetta_port` has no dataset writer and `policy_runner_node` has no policy runner — both fail at resolution time with no backend registered.
 
-Naming, since it is easy to confuse: `lerobot_rosetta` is *Rosetta loading LeRobot* (Rosetta resolves it by entry point). `lerobot_robot_rosetta` is *LeRobot loading Rosetta* (LeRobot auto-discovers it by the `lerobot_robot_*` name prefix). They point in opposite directions and both are needed.
+Naming, since it is easy to confuse: `lerobot_rosetta` is _Rosetta loading LeRobot_ (Rosetta resolves it by entry point). `lerobot_robot_rosetta` is _LeRobot loading Rosetta_ (LeRobot auto-discovers it by the `lerobot_robot_*` name prefix). They point in opposite directions and both are needed.
 
 ### 1.3 Renamed entry points
 
-| 0.1.0 — what this repo documents today | 0.2.0 |
-| --- | --- |
-| `python -m rosetta.port_bags` | `rosetta_port` console script |
-| `rosetta_client_launch.py` | `policy_runner_launch.py` |
-| `rosetta_client_node` | `policy_runner_node` |
-| `rosetta_hil_launch.py` | `hil_launch.py` |
+| 0.1.0 — what this repo documents today | 0.2.0                         |
+| -------------------------------------- | ----------------------------- |
+| `python -m rosetta.port_bags`          | `rosetta_port` console script |
+| `rosetta_client_launch.py`             | `policy_runner_launch.py`     |
+| `rosetta_client_node`                  | `policy_runner_node`          |
+| `rosetta_hil_launch.py`                | `hil_launch.py`               |
 
 `episode_recorder_launch.py` and `episode_keyboard_node` keep their names. `rosetta_port` keeps `--raw-dir`, `--contract`, `--repo-id`, `--root`, and adds `--framework`, `--streaming-encoding`, `--num-shards`/`--shard-index`.
 
@@ -68,7 +68,7 @@ Naming, since it is easy to confuse: `lerobot_rosetta` is *Rosetta loading LeRob
 
 **Record raw, decode late.** Episodes are now recorded as raw rosbag2 messages with the exact contract text embedded in the bag's `metadata.yaml`. All decoding, resizing, alignment, and unit conversion moved to port or inference time. The payoff: **re-porting with a revised contract no longer requires re-recording.** Conversion reads the contract you pass it and treats the embedded copy as provenance, warning on mismatch.
 
-**`record_all: true` is the default.** The recorder captures every topic on the graph, like `ros2 bag record -a`, with `exclude_topics`/`include_topics` regex lists for the exceptions. Contract topics become a *manifest* — required to be present, never a filter. Only `/rosout` and `/parameter_events` are dropped automatically. Our sim bags will get materially larger, since the whole `ros_gz_bridge` graph now lands in them.
+**`record_all: true` is the default.** The recorder captures every topic on the graph, like `ros2 bag record -a`, with `exclude_topics`/`include_topics` regex lists for the exceptions. Contract topics become a _manifest_ — required to be present, never a filter. Only `/rosout` and `/parameter_events` are dropped automatically. Our sim bags will get materially larger, since the whole `ros_gz_bridge` graph now lands in them.
 
 **One `image_transport` stream per camera.** Contract-declared streams win as-is; otherwise the recorder picks the best advertised stream by preference `compressed > zstd > theora > compressedDepth > raw`. The reason is load: `image_transport` republishers encode only while subscribed, so recording all of them makes one camera node encode every frame several ways at once. Our sim path (`ros_gz_bridge`, MuJoCo) publishes raw only, so declaring raw stays correct there.
 
@@ -88,39 +88,39 @@ Naming, since it is easy to confuse: `lerobot_rosetta` is *Rosetta loading LeRob
 
 Sections changed from **lists of entries carrying a `key:` field** to **mappings keyed by frame key**. Within an entry:
 
-| 0.1.0 | 0.2.0 |
-| --- | --- |
-| `topic:`, `type:`, `qos:` at entry level | all inside `channel: {topic, type, qos, dtype, safety, decoder, encoder}` |
-| `selector: {names: [...]}` | `select: [...]` — a bare list |
-| `align: {strategy, stamp, tol_ms}` | `align: {strategy, timeline}`; `stamp` → `timeline`, `tol_ms` → `tolerance_ms` (only meaningful for `asof`) |
-| `unit_conversion: rad2deg` | `apply: [rad2deg]` |
-| `image: {resize: [h, w]}` | `apply: [resize: [h, w]]` |
-| `from_tensor: {clamp: [lo, hi]}` | `apply: [clamp: {min: lo, max: hi}]` |
-| `safety_behavior: hold` | `channel.safety: hold` |
-| `publish: {topic, type, layout, qos, strategy}` on actions | gone — an action uses the same `channel`, read right-to-left |
-| `max_duration_s:` in the contract | ROS parameter `default_max_duration_s`, default no limit |
-| `recording: {storage: mcap}` | launch argument `storage_id` |
-| — | `robot_interface: ros2`, **required** |
+| 0.1.0                                                      | 0.2.0                                                                                                       |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `topic:`, `type:`, `qos:` at entry level                   | all inside `channel: {topic, type, qos, dtype, safety, decoder, encoder}`                                   |
+| `selector: {names: [...]}`                                 | `select: [...]` — a bare list                                                                               |
+| `align: {strategy, stamp, tol_ms}`                         | `align: {strategy, timeline}`; `stamp` → `timeline`, `tol_ms` → `tolerance_ms` (only meaningful for `asof`) |
+| `unit_conversion: rad2deg`                                 | `apply: [rad2deg]`                                                                                          |
+| `image: {resize: [h, w]}`                                  | `apply: [resize: [h, w]]`                                                                                   |
+| `from_tensor: {clamp: [lo, hi]}`                           | `apply: [clamp: {min: lo, max: hi}]`                                                                        |
+| `safety_behavior: hold`                                    | `channel.safety: hold`                                                                                      |
+| `publish: {topic, type, layout, qos, strategy}` on actions | gone — an action uses the same `channel`, read right-to-left                                                |
+| `max_duration_s:` in the contract                          | ROS parameter `default_max_duration_s`, default no limit                                                    |
+| `recording: {storage: mcap}`                               | launch argument `storage_id`                                                                                |
+| —                                                          | `robot_interface: ros2`, **required**                                                                       |
 
 ### 2.1 `apply` is directional, and the order matters
 
 On the record path, operators run front-to-back through their forward direction. On the serve path they run **back-to-front through their inverse**. Operators carry invertibility tiers:
 
-| Operator | Form | Tier |
-| --- | --- | --- |
-| `rad2deg` | `rad2deg` | `BIJECTIVE` — round-trip verified at contract load |
-| `clamp` | `clamp: {min: lo, max: hi}` | `BIDIRECTIONAL` |
-| `resize` | `resize: [h, w]` | `FORWARD_ONLY` — image observations only |
+| Operator  | Form                        | Tier                                               |
+| --------- | --------------------------- | -------------------------------------------------- |
+| `rad2deg` | `rad2deg`                   | `BIJECTIVE` — round-trip verified at contract load |
+| `clamp`   | `clamp: {min: lo, max: hi}` | `BIDIRECTIONAL`                                    |
+| `resize`  | `resize: [h, w]`            | `FORWARD_ONLY` — image observations only           |
 
 **An action's `apply` accepts only `BIDIRECTIONAL` or `BIJECTIVE` operators**, refused at contract load rather than silently corrupting actions at deployment.
 
 This makes operator order load-bearing for our contract. The old `from_tensor.clamp` meant "clamp the outgoing command, in radians". To reproduce that, `clamp` must come **before** `rad2deg`:
 
 ```yaml
-apply: [clamp: {min: -3.14159, max: 3.14159}, rad2deg]
+apply: [clamp: { min: -3.14159, max: 3.14159 }, rad2deg]
 ```
 
-Serve runs that backwards through the inverses — `deg2rad`, then `clamp` — so the clamp lands in radians immediately before publish. Writing `[rad2deg, clamp]` instead would clamp *degrees* to ±3.14 and destroy every command.
+Serve runs that backwards through the inverses — `deg2rad`, then `clamp` — so the clamp lands in radians immediately before publish. Writing `[rad2deg, clamp]` instead would clamp _degrees_ to ±3.14 and destroy every command.
 
 ### 2.2 Load-time validation is now total
 
@@ -140,13 +140,13 @@ Our contract has one numeric observation key, two image keys, and one action key
 
 The new `lerobot_rosetta` imports APIs that **do not exist** in the LeRobot 0.5.1 currently installed in `.pixi/envs/default`:
 
-| Import | In 0.5.1? | Needed for |
-| --- | --- | --- |
-| `lerobot.configs.RGBEncoderConfig` | **missing** | `dataset_writer` → `rosetta_port` |
+| Import                                                          | In 0.5.1?        | Needed for                        |
+| --------------------------------------------------------------- | ---------------- | --------------------------------- |
+| `lerobot.configs.RGBEncoderConfig`                              | **missing**      | `dataset_writer` → `rosetta_port` |
 | `lerobot.policies.get_policy_class`, `make_pre_post_processors` | **not exported** | `policy_server` → local inference |
-| `lerobot.rewards.factory` | **missing** | `classifier_server` (HIL only) |
-| `lerobot.async_inference.*` | present | policy runner |
-| `lerobot.utils.device_utils.is_torch_device_available` | present | device resolution |
+| `lerobot.rewards.factory`                                       | **missing**      | `classifier_server` (HIL only)    |
+| `lerobot.async_inference.*`                                     | present          | policy runner                     |
+| `lerobot.utils.device_utils.is_torch_device_available`          | present          | device resolution                 |
 
 So both porting and deployment break on 0.5.1. Upstream `rosetta_ws` pins **`lerobot v0.6.0`**; PyPI also has 0.6.1. Both ship as `py3-none-any` wheels with `requires_python >=3.12`, so this workspace's Python 3.14 is not excluded a priori — but the transitive pins are a fresh solve, and `pixi.toml` carries a stack of workarounds that all need revalidation against 0.6.0's metadata:
 
@@ -172,7 +172,7 @@ Extras also change. Rosetta's installation guide asks for `lerobot[dataset,async
 
 **`Float64MultiArray` provides no `header` timeline.** Our action channel is `/forward_position_controller/commands`, a `std_msgs/msg/Float64MultiArray`, which carries no `std_msgs/Header`. It therefore provides only the `receive` timeline, and `align: {timeline: header}` on it is a load-time error. It must be `receive`. This replaces the old `publish.strategy: {mode: nearest, tolerance_ms: 100}`, which has no direct equivalent.
 
-**`select` names on a MultiArray are arbitrary labels.** The `Float64MultiArray` decoder ignores `spec.names` entirely; `select` exists to declare the vector width and to name the dataset features. Keeping the `*.pos` names for `lerobot-replay`/`so101_follower` interop is still valid and costs nothing. (This does *not* hold for `JointState`, where `select` paths are real field lookups — `position.shoulder_pan_joint` resolves to `msg.position[msg.name.index("shoulder_pan_joint")]`.)
+**`select` names on a MultiArray are arbitrary labels.** The `Float64MultiArray` decoder ignores `spec.names` entirely; `select` exists to declare the vector width and to name the dataset features. Keeping the `*.pos` names for `lerobot-replay`/`so101_follower` interop is still valid and costs nothing. (This does _not_ hold for `JointState`, where `select` paths are real field lookups — `position.shoulder_pan_joint` resolves to `msg.position[msg.name.index("shoulder_pan_joint")]`.)
 
 ---
 
@@ -205,11 +205,11 @@ Bump three pins to `origin/main` as of 2026-08-01 and add `lerobot-rosetta`. See
 
 ### Step 5 — Documentation
 
-| File | Work |
-| --- | --- |
+| File                                | Work                                                                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `docs/demos/end-to-end-pipeline.md` | Heaviest: the launch/CLI renames, the new contract, `record_all`, the action-result changes, contract-from-checkpoint deployment |
-| `pai_data_collection/README.md` | Same renames plus the new contract snippet |
-| `README.md` | Add `lerobot_rosetta` to the external-packages table |
+| `pai_data_collection/README.md`     | Same renames plus the new contract snippet                                                                                       |
+| `README.md`                         | Add `lerobot_rosetta` to the external-packages table                                                                             |
 
 ### Step 6 — Verification
 
@@ -225,14 +225,14 @@ Step 5 is the one that may not pass. Datasets ported under the old schema have n
 
 ## 5. Migration record
 
-| Step | Status | Notes |
-| --- | --- | --- |
-| 1. `pai.repos` | **done** | Three pins bumped, `lerobot-rosetta` added |
-| 2. `pixi.toml` deps | **done** | `lerobot==0.6.0` with `["dataset", "feetech", "async"]`. Solve succeeded on Python 3.14; all five previously-missing adapter APIs verified present |
-| 3. Contract v2 | **done** | Rewritten and validated through `load_contract`; operator direction verified numerically |
-| 4. `pixi.toml` tasks | **done** | `use_sim_time:=true` on `rosetta-record-mujoco`; new `rosetta-port` task |
-| 5. Documentation | **done** | Pipeline guide, pre-trained demo, data-collection README, both README package tables |
-| 6. Verification | **partial** | Build, contract load, entry-point discovery, and CLI all pass. Runtime steps (record → port → deploy) need a robot session |
+| Step                 | Status      | Notes                                                                                                                                              |
+| -------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `pai.repos`       | **done**    | Three pins bumped, `lerobot-rosetta` added                                                                                                         |
+| 2. `pixi.toml` deps  | **done**    | `lerobot==0.6.0` with `["dataset", "feetech", "async"]`. Solve succeeded on Python 3.14; all five previously-missing adapter APIs verified present |
+| 3. Contract v2       | **done**    | Rewritten and validated through `load_contract`; operator direction verified numerically                                                           |
+| 4. `pixi.toml` tasks | **done**    | `use_sim_time:=true` on `rosetta-record-mujoco`; new `rosetta-port` task                                                                           |
+| 5. Documentation     | **done**    | Pipeline guide, pre-trained demo, data-collection README, both README package tables                                                               |
+| 6. Verification      | **partial** | Build, contract load, entry-point discovery, and CLI all pass. Runtime steps (record → port → deploy) need a robot session                         |
 
 ### What the bump turned up
 
@@ -240,7 +240,7 @@ Step 5 is the one that may not pass. Datasets ported under the old schema have n
 
 **Operator ordering verified numerically, not just read off the docs.** With `apply: [clamp, rad2deg]`, the serve path maps 90° to 1.5708 rad and clamps an out-of-distribution 400° to 3.14159 rad — the clamp landing in radians, last. The record path maps π/2 rad to 90°, and the in-range round trip is the identity.
 
-**`rosetta_port` is not on `PATH`.** Upstream's docs show a bare `rosetta_port`, but rosetta's `setup.cfg` sets `install_scripts=$base/lib/rosetta`, which is where `ros2 run` looks and not a `PATH` entry. It must be invoked as `ros2 run rosetta rosetta_port`. (`lerobot_rosetta` has no such directive, so *its* `rosetta_policy_server` does land on `PATH` — the two packages differ.)
+**`rosetta_port` is not on `PATH`.** Upstream's docs show a bare `rosetta_port`, but rosetta's `setup.cfg` sets `install_scripts=$base/lib/rosetta`, which is where `ros2 run` looks and not a `PATH` entry. It must be invoked as `ros2 run rosetta rosetta_port`. (`lerobot_rosetta` has no such directive, so _its_ `rosetta_policy_server` does land on `PATH` — the two packages differ.)
 
 **`--framework` confirms the adapter wiring end to end.** `ros2 run rosetta rosetta_port --help` reports `Installed: lerobot`, which means the `rosetta.dataset_writers` entry point resolved through the newly added `lerobot_rosetta` package. That is the single best smoke test that the restructure is correctly installed.
 
@@ -260,12 +260,12 @@ Fixed by shipping [`pai_data_collection/config/rosetta/policy_runner.yaml`](../.
 
 ### Target pins
 
-| Package | Commit | Date |
-| --- | --- | --- |
-| `rosetta` | `dfd07e40e1a20825e3a3f37cc897663fb3759285` | 2026-08-01 |
-| `rosetta_interfaces` | `17d06b639960b8a4de0d1970b4c42d306951d567` | 2026-08-01 |
+| Package                 | Commit                                     | Date       |
+| ----------------------- | ------------------------------------------ | ---------- |
+| `rosetta`               | `dfd07e40e1a20825e3a3f37cc897663fb3759285` | 2026-08-01 |
+| `rosetta_interfaces`    | `17d06b639960b8a4de0d1970b4c42d306951d567` | 2026-08-01 |
 | `lerobot_robot_rosetta` | `cd9b4c140ee5b6b02f3e57f76dfeb1a737646d86` | 2026-08-01 |
-| `lerobot_rosetta` | `1ea49d620fb344360e4982b9d59031c09efd4564` | 2026-08-01 |
+| `lerobot_rosetta`       | `1ea49d620fb344360e4982b9d59031c09efd4564` | 2026-08-01 |
 
 Superseding `rosetta` `fb3860c`, `rosetta_interfaces` `90e9791`, `lerobot_robot_rosetta` `e4ed91e`.
 

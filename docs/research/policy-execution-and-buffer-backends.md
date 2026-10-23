@@ -36,8 +36,8 @@ The harder blocker is upstream of PEP entirely: **PEP consumes ONNX models, and 
 
 **On `rosidl_buffer_backends`.** Two hard gates, both verified:
 
-- **The RMW gate.** Buffer-aware pub/sub landed in `rmw_zenoh_cpp` **0.10.5**. RoboStack Lyrical publishes **0.10.4** only. This repo sets `RMW_IMPLEMENTATION=rmw_zenoh_cpp`. **Zero-copy buffer transport cannot engage in this workspace today, at all.** `rmw_fastrtps_cpp` 9.4.8 on RoboStack *does* support it, so switching RMW is the only way to exercise the feature right now.
-- **The payload gate.** Even with the RMW sorted, this repo's frames are 640×480 RGB ≈ **0.88 MiB**. The upstream benchmark's *smallest* data point is 7.9 MiB, and — as [§5.5](#55-reading-the-upstream-benchmark-honestly) shows by reading the benchmark's source — those headline "3.3×–5.8×" numbers are **not a transport benchmark**: the CPU column also renders on CPU. They cannot be extrapolated down to our payloads as-is.
+- **The RMW gate.** Buffer-aware pub/sub landed in `rmw_zenoh_cpp` **0.10.5**. RoboStack Lyrical publishes **0.10.4** only. This repo sets `RMW_IMPLEMENTATION=rmw_zenoh_cpp`. **Zero-copy buffer transport cannot engage in this workspace today, at all.** `rmw_fastrtps_cpp` 9.4.8 on RoboStack _does_ support it, so switching RMW is the only way to exercise the feature right now.
+- **The payload gate.** Even with the RMW sorted, this repo's frames are 640×480 RGB ≈ **0.88 MiB**. The upstream benchmark's _smallest_ data point is 7.9 MiB, and — as [§5.5](#55-reading-the-upstream-benchmark-honestly) shows by reading the benchmark's source — those headline "3.3×–5.8×" numbers are **not a transport benchmark**: the CPU column also renders on CPU. They cannot be extrapolated down to our payloads as-is.
 
 There is a third, structural point that applies to both: **this repository currently contains no C++ source at all.** Every package is `ament_cmake` install-only or `ament_python`. Adopting either technology introduces the first compiled package, the first plugin library, and a meaningfully larger build surface into a workspace whose current value proposition is "`pixi install && pixi run build`".
 
@@ -45,14 +45,14 @@ There is a third, structural point that applies to both: **this repository curre
 
 **Bottom line.** The latency in the current deployment path is dominated by a Python process boundary and a gRPC hop, not by ROS transport. PEP attacks that; buffer backends do not. Sequence accordingly: **PEP-shaped work first, buffer backends later and only if payloads grow.**
 
-| Option | Payoff | Effort | Risk | Verdict |
-| --- | --- | --- | --- | --- |
-| **PEP-B** — vendor PEP, write four SO-ARM plugins, run as a standalone node beside Rosetta | High (removes Python + gRPC hops) | High | Medium (blocked on ONNX export) | **Recommended target**, once ONNX export exists |
-| **PEP-C** — host the pipeline inside a `ros2_control` controller | Highest | Very high | High (PEP API incompatible today, see [§4.5](#45-gaps-found-by-reading-the-code)) | Right long-term shape; premature now |
-| **PEP-A** — track upstream, prototype ONNX export only | Low direct | Low | Low | **Do this now** |
-| **ROS-L1** — custom `PolicyRunner` entry-point plugin (see [§6.3](#63-level-1--your-own-policyrunner-keeping-the-node)) | Framework independence, remote inference — **not** latency | Low | Low | **Do this if the goal is modularity** |
-| **BUF-1** — bump `rmw_zenoh_cpp` to ≥ 0.10.5 on RoboStack | Enables everything else | Low–medium (upstream packaging) | Low | **Do this now**; it is a prerequisite, not a feature |
-| **BUF-3** — build `cuda_buffer_backend` from source, enable CUDA path | Low at current payloads | High | Medium | Defer until after PEP-B |
+| Option                                                                                                                  | Payoff                                                     | Effort                          | Risk                                                                              | Verdict                                              |
+| ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **PEP-B** — vendor PEP, write four SO-ARM plugins, run as a standalone node beside Rosetta                              | High (removes Python + gRPC hops)                          | High                            | Medium (blocked on ONNX export)                                                   | **Recommended target**, once ONNX export exists      |
+| **PEP-C** — host the pipeline inside a `ros2_control` controller                                                        | Highest                                                    | Very high                       | High (PEP API incompatible today, see [§4.5](#45-gaps-found-by-reading-the-code)) | Right long-term shape; premature now                 |
+| **PEP-A** — track upstream, prototype ONNX export only                                                                  | Low direct                                                 | Low                             | Low                                                                               | **Do this now**                                      |
+| **ROS-L1** — custom `PolicyRunner` entry-point plugin (see [§6.3](#63-level-1--your-own-policyrunner-keeping-the-node)) | Framework independence, remote inference — **not** latency | Low                             | Low                                                                               | **Do this if the goal is modularity**                |
+| **BUF-1** — bump `rmw_zenoh_cpp` to ≥ 0.10.5 on RoboStack                                                               | Enables everything else                                    | Low–medium (upstream packaging) | Low                                                                               | **Do this now**; it is a prerequisite, not a feature |
+| **BUF-3** — build `cuda_buffer_backend` from source, enable CUDA path                                                   | Low at current payloads                                    | High                            | Medium                                                                            | Defer until after PEP-B                              |
 
 ---
 
@@ -60,16 +60,16 @@ There is a third, structural point that applies to both: **this repository curre
 
 Everything below was read directly from source, not from summaries.
 
-| Thing | Where | State when read |
-| --- | --- | --- |
-| `ros2_policy_execution_pipeline` | `github.com/saikishor/ros2_policy_execution_pipeline` | branch `master`, head `9e3478a`, pushed 2026-08-06 |
-| `rosidl_buffer_backends` | `github.com/ros2/rosidl_buffer_backends` | branch `main`, head `d7cd964` |
-| `rosidl_buffer_backends_tutorials` | `github.com/ros2/rosidl_buffer_backends_tutorials` | branch `main`, tag `0.1.0` |
-| `onnxruntime_vendor` | `github.com/ros-controls/onnxruntime_vendor` | branch `main` |
-| Rosetta | `github.com/iblnkn/rosetta` | commit `dfd07e4` (0.2.0), the pin in [`pai.repos`](../../pai.repos). Upstream `HEAD` (`294136d`) is ahead only by docs commits. |
-| `lerobot_rosetta` (reference framework adapter) | `github.com/iblnkn/lerobot-rosetta` | commit `1ea49d6`, version `0.2.0`, which is both the pin and upstream `HEAD` |
-| LeRobot | PyPI `lerobot` | `0.6.0` as pinned in [`pixi.toml`](../../pixi.toml). The latest release is `0.6.1`. |
-| This workspace | — | `main` @ `4d3564c` (Bump to Rosetta 0.2.0, #83) |
+| Thing                                           | Where                                                 | State when read                                                                                                                 |
+| ----------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ros2_policy_execution_pipeline`                | `github.com/saikishor/ros2_policy_execution_pipeline` | branch `master`, head `9e3478a`, pushed 2026-08-06                                                                              |
+| `rosidl_buffer_backends`                        | `github.com/ros2/rosidl_buffer_backends`              | branch `main`, head `d7cd964`                                                                                                   |
+| `rosidl_buffer_backends_tutorials`              | `github.com/ros2/rosidl_buffer_backends_tutorials`    | branch `main`, tag `0.1.0`                                                                                                      |
+| `onnxruntime_vendor`                            | `github.com/ros-controls/onnxruntime_vendor`          | branch `main`                                                                                                                   |
+| Rosetta                                         | `github.com/iblnkn/rosetta`                           | commit `dfd07e4` (0.2.0), the pin in [`pai.repos`](../../pai.repos). Upstream `HEAD` (`294136d`) is ahead only by docs commits. |
+| `lerobot_rosetta` (reference framework adapter) | `github.com/iblnkn/lerobot-rosetta`                   | commit `1ea49d6`, version `0.2.0`, which is both the pin and upstream `HEAD`                                                    |
+| LeRobot                                         | PyPI `lerobot`                                        | `0.6.0` as pinned in [`pixi.toml`](../../pixi.toml). The latest release is `0.6.1`.                                             |
+| This workspace                                  | —                                                     | `main` @ `4d3564c` (Bump to Rosetta 0.2.0, #83)                                                                                 |
 
 Package availability was checked against the `robostack-lyrical` and `conda-forge` channels via the prefix.dev API; ROS release status against [`ros/rosdistro`](https://github.com/ros/rosdistro) `lyrical/distribution.yaml`.
 
@@ -116,16 +116,16 @@ The 0.2.0 restructuring moved this code around without changing its runtime shap
 
 From [`pai_bringup/config/cameras/usb_cam_wrist.yaml`](../../pai_bringup/config/cameras/usb_cam_wrist.yaml) and [`pai_data_collection/config/rosetta/so_arm101.yaml`](../../pai_data_collection/config/rosetta/so_arm101.yaml):
 
-| Quantity | Value |
-| --- | --- |
-| Camera resolution / encoding | 640 × 480, RGB8 |
-| Bytes per frame | 640 × 480 × 3 = **921,600 B ≈ 0.88 MiB** |
-| Camera rate | 30 Hz |
-| Cameras | 2 (wrist + static) |
-| Aggregate image bandwidth | ≈ **55 MB/s** |
-| Network input after contract resize | 480 × 480 × 3 = 691,200 B |
-| `observation.state` | 6 × `float64` = 48 B (negligible) |
-| Contract FPS / `ros2_control` `update_rate` | 50 Hz / 50 Hz |
+| Quantity                                    | Value                                    |
+| ------------------------------------------- | ---------------------------------------- |
+| Camera resolution / encoding                | 640 × 480, RGB8                          |
+| Bytes per frame                             | 640 × 480 × 3 = **921,600 B ≈ 0.88 MiB** |
+| Camera rate                                 | 30 Hz                                    |
+| Cameras                                     | 2 (wrist + static)                       |
+| Aggregate image bandwidth                   | ≈ **55 MB/s**                            |
+| Network input after contract resize         | 480 × 480 × 3 = 691,200 B                |
+| `observation.state`                         | 6 × `float64` = 48 B (negligible)        |
+| Contract FPS / `ros2_control` `update_rate` | 50 Hz / 50 Hz                            |
 
 The state half of the observation is free. **All of the transport cost is images**, and each image is well under one mebibyte.
 
@@ -145,12 +145,12 @@ Two `ament_cmake` packages, Apache-2.0, ~1,100 lines of C++ total.
 
 **`ros2_policy_execution_core`** — a header-only `INTERFACE` library defining four abstract base classes, each a `pluginlib` base:
 
-| Class | Key method | Role |
-| --- | --- | --- |
-| `PreprocessorCore` | `build_observation(now)` → `get_observation()` | Collect observations from registered providers, concatenate, track per-provider data age |
-| `InferenceCore` | `run_inference(obs, out)` | Run the network. **The only framework-specific stage.** |
-| `PostprocessorCore` | `process(inference_output)` | Scale, limit, smooth raw policy output into commands |
-| `ExecutorCore` | `execute(commands)` | Publish to a topic, or write `ros2_control` command interfaces |
+| Class               | Key method                                     | Role                                                                                     |
+| ------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `PreprocessorCore`  | `build_observation(now)` → `get_observation()` | Collect observations from registered providers, concatenate, track per-provider data age |
+| `InferenceCore`     | `run_inference(obs, out)`                      | Run the network. **The only framework-specific stage.**                                  |
+| `PostprocessorCore` | `process(inference_output)`                    | Scale, limit, smooth raw policy output into commands                                     |
+| `ExecutorCore`      | `execute(commands)`                            | Publish to a topic, or write `ros2_control` command interfaces                           |
 
 Plus `preprocessor_support.hpp`, contributed by Julia Jia, holding two helpers: `ObservationProviderRegistry` (named providers called in registration order, with declared segment names validated against what the provider returns) and `HistoryManager` (bounded observation/action deques, newest at the front).
 
@@ -177,11 +177,11 @@ Every stage passes `std::vector<std::shared_ptr<Ort::Value>>`. The README is car
 
 `Ort::Value` is used as a backend-agnostic tensor container because it natively represents every element type the pipeline needs (`float`, `uint8_t` for images, `int64_t`, `bool`, `float16`), offers type-safe typed accessors, and — via `shared_ptr<Ort::Value>` plus ORT's allocator — solves history-buffer ownership without copying between stages. A TensorRT or LibTorch `InferenceCore` is explicitly supported: convert in, run, convert out.
 
-**The cost is real and stated plainly by the author:** ONNX Runtime becomes a compile-time dependency of *every* plugin, including framework-agnostic preprocessors, postprocessors, and their tests. For us that means `onnxruntime_vendor` (or conda `onnxruntime-cpp`) in the dependency graph of any plugin we write, even a trivial one that only publishes a `Float64MultiArray`.
+**The cost is real and stated plainly by the author:** ONNX Runtime becomes a compile-time dependency of _every_ plugin, including framework-agnostic preprocessors, postprocessors, and their tests. For us that means `onnxruntime_vendor` (or conda `onnxruntime-cpp`) in the dependency graph of any plugin we write, even a trivial one that only publishes a `Float64MultiArray`.
 
 Git history shows this was a deliberate, late pivot: PR #4 "Use ONNX datatype for handshake" was merged, while PR #3, which proposed a separate tensor-adapter package, was closed. PR #2 ("Shared datatype") is still open. The contract is therefore **settled but young**.
 
-### 4.3 What it does *not* provide
+### 4.3 What it does _not_ provide
 
 Worth being blunt, because the READMEs are easy to read optimistically:
 
@@ -192,13 +192,13 @@ Worth being blunt, because the READMEs are easy to read optimistically:
 
 ### 4.4 Maturity assessment
 
-| Signal | Reading |
-| --- | --- |
-| Personal namespace (`saikishor/`), not `ros-controls/` | Incubating; not yet an org-supported project |
-| Created 2026-03-30, last push 2026-08-06, 7 stars | Early, low external usage |
-| No root `LICENSE` (Apache-2.0 only in per-package `LICENSE` files) | Minor hygiene gap; licence intent is nonetheless clear |
-| `version` `0.0.0` on both packages | Explicitly pre-release |
-| Author is a `ros2_control` maintainer; co-presenting the [ROSCon 2026 workshop](https://control.ros.org/rolling/doc/resources/roscon2026_workshop.html) "Scaling ros2_control: From Async Hardware Drivers to RL Inference Engines" | Strong signal this is headed for `ros-controls` |
+| Signal                                                                                                                                                                                                                              | Reading                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Personal namespace (`saikishor/`), not `ros-controls/`                                                                                                                                                                              | Incubating; not yet an org-supported project           |
+| Created 2026-03-30, last push 2026-08-06, 7 stars                                                                                                                                                                                   | Early, low external usage                              |
+| No root `LICENSE` (Apache-2.0 only in per-package `LICENSE` files)                                                                                                                                                                  | Minor hygiene gap; licence intent is nonetheless clear |
+| `version` `0.0.0` on both packages                                                                                                                                                                                                  | Explicitly pre-release                                 |
+| Author is a `ros2_control` maintainer; co-presenting the [ROSCon 2026 workshop](https://control.ros.org/rolling/doc/resources/roscon2026_workshop.html) "Scaling ros2_control: From Async Hardware Drivers to RL Inference Engines" | Strong signal this is headed for `ros-controls`        |
 
 That last row matters. The workshop — with Bence Magyar, Christoph Fröhlich, Denis Štogl and Marq Rasmussen alongside the author — covers "deploying RL Policy Models (via ONNX/Torch) as non-blocking controllers", "thread-safe data exchange", and "managing inference jitter". Those are precisely the gaps listed below. The workshop repository ([`ros-controls/roscon2026_control_workshop`](https://github.com/ros-controls/roscon2026_control_workshop)) currently holds only a placeholder `sleepy_controller`, so the material is still in flight.
 
@@ -224,7 +224,7 @@ All four base classes declare:
 virtual void configure(const rclcpp::Node::SharedPtr & node) = 0;
 ```
 
-`controller_interface::ControllerInterfaceBase::get_node()` returns `std::shared_ptr<rclcpp_lifecycle::LifecycleNode>`. These types are not interchangeable and neither derives from the other. So the "run the pipeline inside a controller" story that the `ExecutorCore` documentation gestures at — holding `hardware_interface::LoanedCommandInterface` references — **cannot be implemented against the current API** without upstream changes (taking node *interfaces*, or adding a lifecycle overload). This is the single biggest obstacle to option PEP-C.
+`controller_interface::ControllerInterfaceBase::get_node()` returns `std::shared_ptr<rclcpp_lifecycle::LifecycleNode>`. These types are not interchangeable and neither derives from the other. So the "run the pipeline inside a controller" story that the `ExecutorCore` documentation gestures at — holding `hardware_interface::LoanedCommandInterface` references — **cannot be implemented against the current API** without upstream changes (taking node _interfaces_, or adding a lifecycle overload). This is the single biggest obstacle to option PEP-C.
 
 **(c) Observation providers have a borrowed-reference contract with no synchronisation.**
 
@@ -243,7 +243,7 @@ PEP's natural `InferenceCore` loads an `.onnx` file. Our policies are LeRobot ch
 Three ways through, in increasing order of commitment:
 
 1. **Hand-roll an ACT export.** Feasible per the issue, and ACT is the policy our [pre-trained demo](../demos/pretrained-demo.md) already uses. We would own normalisation statistics, the chunk dimension, and dynamic axes ourselves, plus a numerical-equivalence test against the torch checkpoint. **This is the natural first experiment, and it is independent of every other decision in this document.**
-2. **Skip ONNX; write a LibTorch `InferenceCore`.** Load a TorchScript-traced checkpoint and convert `Ort::Value` ↔ `at::Tensor` inside the stage. Keeps LeRobot's exact operator semantics. Cost: `libtorch_vendor` (or conda `libtorch`) *plus* ONNX Runtime, because the `Ort::Value` contract is unavoidable.
+2. **Skip ONNX; write a LibTorch `InferenceCore`.** Load a TorchScript-traced checkpoint and convert `Ort::Value` ↔ `at::Tensor` inside the stage. Keeps LeRobot's exact operator semantics. Cost: `libtorch_vendor` (or conda `libtorch`) _plus_ ONNX Runtime, because the `Ort::Value` contract is unavoidable.
 3. **Wait for LeRobot 0.7.0.** Zero effort, but no release date, and it means another LeRobot bump. The 0.5.1 → 0.6.0 bump ([migration notes](rosetta-0.2-migration.md)) shows what that costs here: it solved on Python 3.14 only through the existing `numpy` and `draccus` dependency overrides in `pixi.toml`, and it was gated on `lerobot-rosetta`'s API requirements. A 0.7.0 bump would need the same revalidation and a matching `lerobot-rosetta` release.
 
 ### 4.7 Integration alternatives
@@ -260,18 +260,18 @@ Add PEP to [`pai.repos`](../../pai.repos) at a pinned commit, add a new `pai_pol
 
 What the four plugins would be, concretely:
 
-| Stage | Plugin | Responsibility |
-| --- | --- | --- |
-| Preprocessor | `SoArmPreprocessor` | Register three providers: `/joint_states` (6 positions, joint-name ordered per the contract), `/wrist_camera/image_raw`, `/static_camera/image_raw`. Resize to 480×480 and build `uint8` image tensors plus a `float32` state tensor. |
-| Inference | `LeRobotOnnxInference` | Load the exported ACT graph; run with the CUDA (or XPU) execution provider. |
-| Postprocessor | `ActionChunkPostprocessor` | Hold the chunk queue. Apply `deg2rad`, then clamp to `[-3.14159, 3.14159]`, which is the inverse of the action's `apply: [clamp, rad2deg]` pipeline in the contract (see [§6.6](#66-what-level-3-actually-has-to-re-implement)). |
-| Executor | `ForwardCommandExecutor` | Publish `Float64MultiArray` to `/forward_position_controller/commands`. |
+| Stage         | Plugin                     | Responsibility                                                                                                                                                                                                                        |
+| ------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preprocessor  | `SoArmPreprocessor`        | Register three providers: `/joint_states` (6 positions, joint-name ordered per the contract), `/wrist_camera/image_raw`, `/static_camera/image_raw`. Resize to 480×480 and build `uint8` image tensors plus a `float32` state tensor. |
+| Inference     | `LeRobotOnnxInference`     | Load the exported ACT graph; run with the CUDA (or XPU) execution provider.                                                                                                                                                           |
+| Postprocessor | `ActionChunkPostprocessor` | Hold the chunk queue. Apply `deg2rad`, then clamp to `[-3.14159, 3.14159]`, which is the inverse of the action's `apply: [clamp, rad2deg]` pipeline in the contract (see [§6.6](#66-what-level-3-actually-has-to-re-implement)).      |
+| Executor      | `ForwardCommandExecutor`   | Publish `Float64MultiArray` to `/forward_position_controller/commands`.                                                                                                                                                               |
 
 Note how much of this **re-implements the Rosetta contract in C++**: joint selection and ordering, unit conversion, image resize, clamping, and the `hold` safety behaviour all currently live in `so_arm101.yaml`. Duplicating them in compiled plugins creates two sources of truth for the ROS ↔ policy mapping — a real maintenance hazard, and worth designing against explicitly (for example, by having the plugins parse the same contract YAML).
 
 - **Effort:** high — first C++ package in the repo, ~1,000+ lines, plus CUDA/ORT in the pixi environment.
 - **Risk:** medium — blocked on ONNX export; PEP API may churn; chunking mismatch from [§4.5(a)](#45-gaps-found-by-reading-the-code) must be solved.
-- **Payoff:** high — removes the Python boundary *and* the gRPC hop, the two dominant costs in [§3](#3-baseline-where-the-time-goes-today). This is also the configuration in which buffer backends would finally have something to accelerate.
+- **Payoff:** high — removes the Python boundary _and_ the gRPC hop, the two dominant costs in [§3](#3-baseline-where-the-time-goes-today). This is also the configuration in which buffer backends would finally have something to accelerate.
 
 #### PEP-C — Host the pipeline inside a `ros2_control` controller
 
@@ -320,7 +320,7 @@ From the [Lyrical Luth release notes](https://github.com/ros2/ros2_documentation
 
 > All `uint8[]` fields now have the type `rosidl::Buffer<uint8_t>` in C++ instead of `std::vector<uint8_t>`.
 
-This is a **distro-wide C++ type change**, not an opt-in feature. `sensor_msgs::msg::Image::data` is a `rosidl::Buffer<uint8_t>` in Lyrical. The payload's *storage* is delegated to a registered `rosidl::BufferBackend` plugin, so a publisher can allocate the payload in accelerator memory and a co-located subscriber can read it without a host copy — with automatic fallback to the normal CPU path when the endpoints are not compatible.
+This is a **distro-wide C++ type change**, not an opt-in feature. `sensor_msgs::msg::Image::data` is a `rosidl::Buffer<uint8_t>` in Lyrical. The payload's _storage_ is delegated to a registered `rosidl::BufferBackend` plugin, so a publisher can allocate the payload in accelerator memory and a co-located subscriber can read it without a host copy — with automatic fallback to the normal CPU path when the endpoints are not compatible.
 
 The core machinery lives in [`ros2/rosidl`](https://github.com/ros2/rosidl): `rosidl_buffer`, `rosidl_buffer_backend`, `rosidl_buffer_backend_registry`, `rosidl_buffer_py`. The vendor backends live in [`ros2/rosidl_buffer_backends`](https://github.com/ros2/rosidl_buffer_backends), released in Lyrical at `0.1.2-1`.
 
@@ -328,15 +328,15 @@ NVIDIA describes the feature as built on NITROS from Isaac ROS and developed wit
 
 ### 5.2 What is in the repository
 
-| Package | What it is |
-| --- | --- |
-| `cuda_buffer` | Core CUDA implementation: VMM memory pool, IPC manager, host endpoint manager, and the `allocate_buffer` / `from_input_buffer` / `from_output_buffer` / `to_buffer` user API |
-| `cuda_buffer_backend` | The `pluginlib` backend (`rosidl::BufferBackend`, type string `"cuda"`), endpoint discovery, descriptor serialisation |
-| `cuda_buffer_backend_msgs` | `CudaBufferDescriptor.msg` — the small message actually sent over the wire |
-| `qc_buffer_backend` | Qualcomm equivalent, HTP↔CPU zero-copy over dma-buf |
-| `tensor_msgs` | `ExperimentalTensor.msg` — a DLPack-aligned tensor message |
-| `torch_conversions` | Header-only `ExperimentalTensor` ↔ `at::Tensor` bridge, plus DLPack import/export |
-| `libtorch_vendor` | Downloads and installs prebuilt LibTorch |
+| Package                    | What it is                                                                                                                                                                   |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cuda_buffer`              | Core CUDA implementation: VMM memory pool, IPC manager, host endpoint manager, and the `allocate_buffer` / `from_input_buffer` / `from_output_buffer` / `to_buffer` user API |
+| `cuda_buffer_backend`      | The `pluginlib` backend (`rosidl::BufferBackend`, type string `"cuda"`), endpoint discovery, descriptor serialisation                                                        |
+| `cuda_buffer_backend_msgs` | `CudaBufferDescriptor.msg` — the small message actually sent over the wire                                                                                                   |
+| `qc_buffer_backend`        | Qualcomm equivalent, HTP↔CPU zero-copy over dma-buf                                                                                                                          |
+| `tensor_msgs`              | `ExperimentalTensor.msg` — a DLPack-aligned tensor message                                                                                                                   |
+| `torch_conversions`        | Header-only `ExperimentalTensor` ↔ `at::Tensor` bridge, plus DLPack import/export                                                                                            |
+| `libtorch_vendor`          | Downloads and installs prebuilt LibTorch                                                                                                                                     |
 
 Note the naming: `ExperimentalTensor` is experimental **on purpose** — its README says the schema "may change before it is renamed to `Tensor` and stabilized".
 
@@ -354,39 +354,39 @@ Three process-wide singletons back this: `CudaMemoryPool`, `CudaVmmIPCManager`, 
 
 #### Gate 1 — the RMW (hard blocker today)
 
-| RMW | Buffer support since | RoboStack Lyrical ships | Usable? |
-| --- | --- | --- | --- |
-| `rmw_fastrtps_cpp` | **9.4.6** (2026-04-09) | **9.4.8** | ✅ yes |
-| `rmw_zenoh_cpp` | **0.10.5** (2026-07-22) | **0.10.4** | ❌ **no** |
+| RMW                | Buffer support since    | RoboStack Lyrical ships | Usable?   |
+| ------------------ | ----------------------- | ----------------------- | --------- |
+| `rmw_fastrtps_cpp` | **9.4.6** (2026-04-09)  | **9.4.8**               | ✅ yes    |
+| `rmw_zenoh_cpp`    | **0.10.5** (2026-07-22) | **0.10.4**              | ❌ **no** |
 
 `rmw_zenoh` support came from [PR #930](https://github.com/ros2/rmw_zenoh/pull/930) (merged to `rolling` 2026-06-04, backported to `lyrical` as #987) and first shipped in 0.10.5. RoboStack has not picked that up: a channel query for `ros-lyrical-rmw-zenoh-cpp` on `robostack-lyrical` returns **0.10.4 only**, across all 15 build variants, which matches the pin in our `pixi.lock`.
 
 This repository sets `RMW_IMPLEMENTATION=rmw_zenoh_cpp` in `pixi.toml` `[activation.env]`. **Therefore, as the workspace stands, buffer backends cannot engage. Every message would take the CPU fallback path.**
 
-Two encouraging notes: the core infrastructure is *already installed* — `pixi.lock` contains `ros-lyrical-rosidl-buffer`, `-rosidl-buffer-backend`, `-rosidl-buffer-backend-registry` and `-rosidl-buffer-py`, all at 5.2.1 — and `ros-lyrical-rmw-fastrtps-cpp` 9.4.8 is available, so a FastRTPS benchmark is possible today without any RoboStack work.
+Two encouraging notes: the core infrastructure is _already installed_ — `pixi.lock` contains `ros-lyrical-rosidl-buffer`, `-rosidl-buffer-backend`, `-rosidl-buffer-backend-registry` and `-rosidl-buffer-py`, all at 5.2.1 — and `ros-lyrical-rmw-fastrtps-cpp` 9.4.8 is available, so a FastRTPS benchmark is possible today without any RoboStack work.
 
 #### Gate 2 — package availability
 
 Checked against `robostack-lyrical`:
 
-| Package | On RoboStack? |
-| --- | --- |
-| `rosidl_buffer`, `rosidl_buffer_backend`, `rosidl_buffer_backend_registry`, `rosidl_buffer_py` | ✅ 5.2.1, already in our lock |
-| `cuda_buffer`, `cuda_buffer_backend`, `cuda_buffer_backend_msgs` | ❌ absent |
-| `tensor_msgs`, `torch_conversions`, `libtorch_vendor` | ❌ absent |
-| `onnxruntime_vendor` | ❌ absent (conda `onnxruntime-cpp` 1.29.0 exists instead) |
+| Package                                                                                        | On RoboStack?                                             |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `rosidl_buffer`, `rosidl_buffer_backend`, `rosidl_buffer_backend_registry`, `rosidl_buffer_py` | ✅ 5.2.1, already in our lock                             |
+| `cuda_buffer`, `cuda_buffer_backend`, `cuda_buffer_backend_msgs`                               | ❌ absent                                                 |
+| `tensor_msgs`, `torch_conversions`, `libtorch_vendor`                                          | ❌ absent                                                 |
+| `onnxruntime_vendor`                                                                           | ❌ absent (conda `onnxruntime-cpp` 1.29.0 exists instead) |
 
-All of these *are* released as Lyrical debs on `build.ros2.org`, so this is a RoboStack packaging gap, not an upstream one. In our workspace they would have to be source builds via `pai.repos` — and `cuda_buffer` additionally needs a CUDA Toolkit ≥ 11.8, which `pixi.toml` does not currently provide in any form.
+All of these _are_ released as Lyrical debs on `build.ros2.org`, so this is a RoboStack packaging gap, not an upstream one. In our workspace they would have to be source builds via `pai.repos` — and `cuda_buffer` additionally needs a CUDA Toolkit ≥ 11.8, which `pixi.toml` does not currently provide in any form.
 
 ### 5.5 Reading the upstream benchmark honestly
 
 The [`robot_arm_demo` tutorial](https://github.com/ros2/rosidl_buffer_backends_tutorials) publishes reference numbers, measured inter-process, headless, over FastRTPS:
 
-| Resolution | Frame size | `torch_conversions` + CUDA IPC | CPU fallback |
-| --- | ---: | ---: | ---: |
-| 1920 × 1080 | 7.9 MiB | 116.6 FPS | 35.5 FPS |
-| 2560 × 1440 | 14.1 MiB | 90.6 FPS | 21.3 FPS |
-| 3840 × 2160 | 31.6 MiB | 59.5 FPS | 10.3 FPS |
+| Resolution  | Frame size | `torch_conversions` + CUDA IPC | CPU fallback |
+| ----------- | ---------: | -----------------------------: | -----------: |
+| 1920 × 1080 |    7.9 MiB |                      116.6 FPS |     35.5 FPS |
+| 2560 × 1440 |   14.1 MiB |                       90.6 FPS |     21.3 FPS |
+| 3840 × 2160 |   31.6 MiB |                       59.5 FPS |     10.3 FPS |
 
 Converted to per-frame time, the gap is strikingly linear in payload size — 19.6 ms, 35.9 ms and 80.3 ms respectively, i.e. ≈ **2.5 ms per MiB** at all three points.
 
@@ -405,11 +405,11 @@ and `robot_arm_compare.launch.py` sets `use_cuda: False` for the whole "CPU" col
 
 Set the RMW gate aside and assume Zenoh 0.10.5. The feature still would not fire, for a structural reason: **a zero-copy handoff needs both endpoints to opt in, and ours cannot.**
 
-| Endpoint | What it is | Can it hold a CUDA buffer? |
-| --- | --- | --- |
-| Producer (real) | `usb_cam` — V4L2 `mmap`, `mjpeg2rgb` decode on CPU | No. Writes host memory; would need upstream changes to allocate from a CUDA pool. |
-| Producer (sim) | `ros_gz_bridge parameter_bridge` — converts `gz.msgs.Image` → `sensor_msgs/Image` | No. Gazebo renders on the GPU but `gz-transport` hands the bridge a host buffer; a GPU-native bridge is substantial upstream work. |
-| Consumer | `policy_runner_node` (`TopicBridge`), in Python | No. `rosidl_buffer_py` surfaces buffers to NumPy on the host; the GPU path is a C++ API. |
+| Endpoint        | What it is                                                                        | Can it hold a CUDA buffer?                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Producer (real) | `usb_cam` — V4L2 `mmap`, `mjpeg2rgb` decode on CPU                                | No. Writes host memory; would need upstream changes to allocate from a CUDA pool.                                                  |
+| Producer (sim)  | `ros_gz_bridge parameter_bridge` — converts `gz.msgs.Image` → `sensor_msgs/Image` | No. Gazebo renders on the GPU but `gz-transport` hands the bridge a host buffer; a GPU-native bridge is substantial upstream work. |
+| Consumer        | `policy_runner_node` (`TopicBridge`), in Python                                   | No. `rosidl_buffer_py` surfaces buffers to NumPy on the host; the GPU path is a C++ API.                                           |
 
 So today: CPU producer → CPU consumer. The descriptor path would never be selected, and `on_discovering_endpoint` would return the fallback decision every time.
 
@@ -419,7 +419,7 @@ There is one nuance worth flagging even in the fallback case. Because Lyrical ch
 
 In rough order of plausibility:
 
-1. **A C++ inference consumer** (i.e. PEP-B lands). At minimum this removes the Python-side decode; and if we ever split preprocessing into its own GPU node, the *intra-pipeline* hop between our own nodes is one we fully control — both ends could be CUDA-aware. This is the realistic first place a buffer backend earns its keep here.
+1. **A C++ inference consumer** (i.e. PEP-B lands). At minimum this removes the Python-side decode; and if we ever split preprocessing into its own GPU node, the _intra-pipeline_ hop between our own nodes is one we fully control — both ends could be CUDA-aware. This is the realistic first place a buffer backend earns its keep here.
 2. **Higher resolution or more cameras.** The benefit scales with bytes. Going to 1280×720 (2.6 MiB/frame) roughly triples the payload; adding cameras multiplies it. At 640×480×2 we are firmly in the regime where it does not matter.
 3. **A GPU-native image producer.** A CUDA-aware camera driver, or hardware JPEG decode landing straight in device memory. Nothing in our current stack does this.
 4. **`tensor_msgs` for observations/actions between our own nodes.** `ExperimentalTensor` is DLPack-aligned, so PyTorch, ONNX Runtime, JAX and CuPy can all round-trip it. If the pipeline is ever split across processes, this is the right message type — with the caveat that the schema is explicitly unstable.
@@ -456,7 +456,7 @@ This repo gained Intel XPU support in `80dc00c` (Tom Counihan, Intel). `rosidl_b
 
 ## 6. Substitution points: what a separate inference node can reuse
 
-Everything in [§4](#4-ros2_policy_execution_pipeline) describes building a *new* inference path. The obvious follow-up question is what happens to the Rosetta stack we already have — do we lose recording, dataset conversion, and the contract, or can they survive alongside a different inference engine?
+Everything in [§4](#4-ros2_policy_execution_pipeline) describes building a _new_ inference path. The obvious follow-up question is what happens to the Rosetta stack we already have — do we lose recording, dataset conversion, and the contract, or can they survive alongside a different inference engine?
 
 They survive. Rosetta 0.2.0 was restructured precisely so the policy framework is a swappable plugin, and understanding where its seams are changes the cost of every option in [§4.7](#47-integration-alternatives).
 
@@ -470,14 +470,14 @@ It is easy to think of Rosetta as "the thing that talks to LeRobot". Since 0.2.0
 
 Our [`pai.repos`](../../pai.repos) pins four repositories:
 
-| Package | Role | Imports LeRobot? |
-| --- | --- | --- |
-| `rosetta` | The core: contract, frames, ROS 2 robot interface, nodes, `rosetta_port`, and the plugin registries | **No** |
-| `rosetta_interfaces` | ROS 2 actions and services (`RunPolicy`, `RecordEpisode`, `ManageEpisode`, `StartPolicy`, `StartHILEpisode`) | No |
-| `lerobot_rosetta` | **Rosetta → LeRobot.** Registers `LeRobotDatasetWriter` and `LeRobotPolicyRunner`, and ships `rosetta_policy_server` and the HIL `rosetta_classifier_server` | Yes |
-| `lerobot_robot_rosetta` | **LeRobot → Rosetta.** A LeRobot `Robot` plugin (`--robot.type=rosetta`) that makes a contract-described ROS 2 robot look like LeRobot hardware. `LeRobotPolicyRunner` drives the robot through it via `RobotClient`. | Yes |
+| Package                 | Role                                                                                                                                                                                                                  | Imports LeRobot? |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `rosetta`               | The core: contract, frames, ROS 2 robot interface, nodes, `rosetta_port`, and the plugin registries                                                                                                                   | **No**           |
+| `rosetta_interfaces`    | ROS 2 actions and services (`RunPolicy`, `RecordEpisode`, `ManageEpisode`, `StartPolicy`, `StartHILEpisode`)                                                                                                          | No               |
+| `lerobot_rosetta`       | **Rosetta → LeRobot.** Registers `LeRobotDatasetWriter` and `LeRobotPolicyRunner`, and ships `rosetta_policy_server` and the HIL `rosetta_classifier_server`                                                          | Yes              |
+| `lerobot_robot_rosetta` | **LeRobot → Rosetta.** A LeRobot `Robot` plugin (`--robot.type=rosetta`) that makes a contract-described ROS 2 robot look like LeRobot hardware. `LeRobotPolicyRunner` drives the robot through it via `RobotClient`. | Yes              |
 
-The two adapters point in opposite directions. `lerobot_rosetta` plugs LeRobot *into* Rosetta's seams. `lerobot_robot_rosetta` plugs a Rosetta robot *into* LeRobot's tooling.
+The two adapters point in opposite directions. `lerobot_rosetta` plugs LeRobot _into_ Rosetta's seams. `lerobot_robot_rosetta` plugs a Rosetta robot _into_ LeRobot's tooling.
 
 #### Inside the core
 
@@ -508,33 +508,33 @@ flowchart TB
   MINE -. "entry points" .-> P
 ```
 
-| System | What it does | Key modules |
-| --- | --- | --- |
-| **Contract** | Parses and fully validates the YAML at load. Resolves each entry into a `StreamSpec` (channel → align → select → apply → key). Owns the operator registry. | `contract/schema.py`, `contract/specs.py`, `contract/operators.py` |
-| **Frames** | The message ↔ array boundary (codecs), the fixed-rate resampler (`StreamBuffer`), frame assembly and splitting (`FrameLayout`), and the `FrameIO` protocol | `frames/codecs.py`, `frames/resample.py`, `frames/layout.py`, `frames/protocols.py` |
-| **Robot interface (ROS 2)** | `TopicBridge` (live `FrameIO`), message ingest and timelines, built-in ROS codecs, and the lifecycle nodes. Offline, the bag porter replays bags through the **same** ingest and resampling code. | `robots/ros2/` |
-| **Policy seams** | The `PolicyRunner` and `DatasetWriter` protocols, plus the registry that resolves them by name | `policies/protocols.py`, `policies/registry.py` |
+| System                      | What it does                                                                                                                                                                                      | Key modules                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Contract**                | Parses and fully validates the YAML at load. Resolves each entry into a `StreamSpec` (channel → align → select → apply → key). Owns the operator registry.                                        | `contract/schema.py`, `contract/specs.py`, `contract/operators.py`                  |
+| **Frames**                  | The message ↔ array boundary (codecs), the fixed-rate resampler (`StreamBuffer`), frame assembly and splitting (`FrameLayout`), and the `FrameIO` protocol                                        | `frames/codecs.py`, `frames/resample.py`, `frames/layout.py`, `frames/protocols.py` |
+| **Robot interface (ROS 2)** | `TopicBridge` (live `FrameIO`), message ingest and timelines, built-in ROS codecs, and the lifecycle nodes. Offline, the bag porter replays bags through the **same** ingest and resampling code. | `robots/ros2/`                                                                      |
+| **Policy seams**            | The `PolicyRunner` and `DatasetWriter` protocols, plus the registry that resolves them by name                                                                                                    | `policies/protocols.py`, `policies/registry.py`                                     |
 
 The three layers from a deployment point of view:
 
-| Layer | Pieces | Framework-coupled? |
-| --- | --- | --- |
-| **Offline** | `episode_recorder_node` (bags), `rosetta_port` (bags → dataset) | No. The dataset format comes from a `DatasetWriter` plugin chosen by `--framework`. |
-| **The waist** | The contract + `TopicBridge`: topics ↔ frames, both directions | **No.** This is the part worth keeping, whatever you do with inference. |
-| **Online** | `policy_runner_node` + a `PolicyRunner` plugin | Yes, and it is the *only* inference-coupled piece. |
+| Layer         | Pieces                                                          | Framework-coupled?                                                                  |
+| ------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Offline**   | `episode_recorder_node` (bags), `rosetta_port` (bags → dataset) | No. The dataset format comes from a `DatasetWriter` plugin chosen by `--framework`. |
+| **The waist** | The contract + `TopicBridge`: topics ↔ frames, both directions  | **No.** This is the part worth keeping, whatever you do with inference.             |
+| **Online**    | `policy_runner_node` + a `PolicyRunner` plugin                  | Yes, and it is the _only_ inference-coupled piece.                                  |
 
 #### The extension points
 
 Rosetta has four open registries, all discovered through setuptools entry points: installing a package that advertises one is enough. It also has one protocol-only seam and one closed seam.
 
-| Seam | Mechanism | What you provide | Selected by | Today |
-| --- | --- | --- | --- | --- |
-| **`PolicyRunner`** | Entry-point group `rosetta.policy_runners`: a zero-argument class, checked structurally | Online inference: control loop, model, model-side pre/post ([§7.1](#71-what-the-contract-and-topicbridge-handle-and-what-they-dont)) | `policy_runner_node`'s `framework` parameter | `lerobot` |
-| **`DatasetWriter`** | Entry-point group `rosetta.dataset_writers`: a zero-argument class, checked structurally | Offline dataset format: `open` / `add_frame` / `save_episode` / `discard_episode` / `finalize` | `rosetta_port --framework <name>` | `lerobot` |
-| **Operators** | Entry-point group `rosetta.operators`: a module whose `@register_operator` classes declare an `Invertibility` tier | New `apply:` transforms. `BIJECTIVE` ones must pass a round-trip check at load. | Name in the contract's `apply:` list | `rad2deg`, `resize`, `clamp` (built in) |
-| **Codecs** | Entry-point group `rosetta.codecs`: a module of `@register_decoder` / `@register_encoder` functions keyed by ROS type. Or **inline** per channel via `decoder:` / `encoder:` `"module:function"` in the contract. | Support for new message types | The channel's `type:` (registry) or `decoder:`/`encoder:` (inline) | Built in: `Image`, `CompressedImage`, `JointState`, `Joy`, `std_msgs` scalars and arrays, `JointTrajectory`, `MultiDOFCommand`; `Twist`/`TwistStamped` encode only |
-| **`FrameIO`** | Protocol only, no registry | A non-ROS 2 robot transport. The docstring anticipates ROS 1, Zenoh, MQTT. | Constructed by whatever hosts the runner | `TopicBridge` only |
-| **Robot interface** | **Closed.** `SUPPORTED_ROBOT_INTERFACES = {"ros2"}` in `contract/schema.py` | — | The contract's `robot_interface:` | `ros2` only. The code names this as "the single seam to generalize when a second one exists". |
+| Seam                | Mechanism                                                                                                                                                                                                         | What you provide                                                                                                                     | Selected by                                                        | Today                                                                                                                                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`PolicyRunner`**  | Entry-point group `rosetta.policy_runners`: a zero-argument class, checked structurally                                                                                                                           | Online inference: control loop, model, model-side pre/post ([§7.1](#71-what-the-contract-and-topicbridge-handle-and-what-they-dont)) | `policy_runner_node`'s `framework` parameter                       | `lerobot`                                                                                                                                                          |
+| **`DatasetWriter`** | Entry-point group `rosetta.dataset_writers`: a zero-argument class, checked structurally                                                                                                                          | Offline dataset format: `open` / `add_frame` / `save_episode` / `discard_episode` / `finalize`                                       | `rosetta_port --framework <name>`                                  | `lerobot`                                                                                                                                                          |
+| **Operators**       | Entry-point group `rosetta.operators`: a module whose `@register_operator` classes declare an `Invertibility` tier                                                                                                | New `apply:` transforms. `BIJECTIVE` ones must pass a round-trip check at load.                                                      | Name in the contract's `apply:` list                               | `rad2deg`, `resize`, `clamp` (built in)                                                                                                                            |
+| **Codecs**          | Entry-point group `rosetta.codecs`: a module of `@register_decoder` / `@register_encoder` functions keyed by ROS type. Or **inline** per channel via `decoder:` / `encoder:` `"module:function"` in the contract. | Support for new message types                                                                                                        | The channel's `type:` (registry) or `decoder:`/`encoder:` (inline) | Built in: `Image`, `CompressedImage`, `JointState`, `Joy`, `std_msgs` scalars and arrays, `JointTrajectory`, `MultiDOFCommand`; `Twist`/`TwistStamped` encode only |
+| **`FrameIO`**       | Protocol only, no registry                                                                                                                                                                                        | A non-ROS 2 robot transport. The docstring anticipates ROS 1, Zenoh, MQTT.                                                           | Constructed by whatever hosts the runner                           | `TopicBridge` only                                                                                                                                                 |
+| **Robot interface** | **Closed.** `SUPPORTED_ROBOT_INTERFACES = {"ros2"}` in `contract/schema.py`                                                                                                                                       | —                                                                                                                                    | The contract's `robot_interface:`                                  | `ros2` only. The code names this as "the single seam to generalize when a second one exists".                                                                      |
 
 The registered seams all fail loudly. An unknown or duplicated framework name, a class missing a protocol method, or a plugin module that fails to import is an error at load time, never a silent fallback (`policies/registry.py`, `contract/plugins.py`).
 
@@ -553,12 +553,12 @@ Registering a second name alongside it is additive. It does not displace LeRobot
 
 The seams are independent. **Training data and inference can be decoupled separately**, so it is possible, for example, to keep writing LeRobot datasets while serving with a non-LeRobot runner.
 
-| Today, LeRobot provides | Replacement | Notes |
-| --- | --- | --- |
-| Inference (`LeRobotPolicyRunner` + `rosetta_policy_server`) | A custom `PolicyRunner` ([§7.3](#73-option-1--a-custom-policyrunner)) | The cheapest step. Pass `contract_path` explicitly. |
-| Dataset format (`LeRobotDatasetWriter`) | A custom `DatasetWriter` | Only needed if training moves off LeRobot too. |
-| HIL reward classifier (`rosetta_classifier_server`, used via `is_classifier`) | A `PolicyRunner` that publishes the contract's `reward` section | Only if HIL is in use. |
-| LeRobot tooling access to the robot (`lerobot_robot_rosetta`) | Nothing. It drops out with `LeRobotPolicyRunner`, which is its only consumer on our deployment path. | LeRobot CLI tools such as `lerobot-record` against a Rosetta robot would go with it. |
+| Today, LeRobot provides                                                       | Replacement                                                                                          | Notes                                                                                |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Inference (`LeRobotPolicyRunner` + `rosetta_policy_server`)                   | A custom `PolicyRunner` ([§7.3](#73-option-1--a-custom-policyrunner))                                | The cheapest step. Pass `contract_path` explicitly.                                  |
+| Dataset format (`LeRobotDatasetWriter`)                                       | A custom `DatasetWriter`                                                                             | Only needed if training moves off LeRobot too.                                       |
+| HIL reward classifier (`rosetta_classifier_server`, used via `is_classifier`) | A `PolicyRunner` that publishes the contract's `reward` section                                      | Only if HIL is in use.                                                               |
+| LeRobot tooling access to the robot (`lerobot_robot_rosetta`)                 | Nothing. It drops out with `LeRobotPolicyRunner`, which is its only consumer on our deployment path. | LeRobot CLI tools such as `lerobot-record` against a Rosetta robot would go with it. |
 
 Beyond the plugins, a few **LeRobot conventions live in the core itself**. They are not imports, but a second framework inherits them unless upstream generalises them:
 
@@ -591,17 +591,17 @@ Rosetta's internal vocabulary is the **frame**: a plain dict mapping each contra
 
 That is the whole policy-facing surface, formalised as the `FrameIO` protocol:
 
-| Method | Meaning |
-| --- | --- |
-| `sample_frame()` | Current observation frame |
-| `publish_frame(frame)` | Publish one action frame |
-| `warmed_up` | True once every observation stream has produced at least one sample |
-| `send_safety_action()` | Emit the contract's declared safety action |
-| `reset_state()` | Clear per-episode buffers between runs |
+| Method                 | Meaning                                                             |
+| ---------------------- | ------------------------------------------------------------------- |
+| `sample_frame()`       | Current observation frame                                           |
+| `publish_frame(frame)` | Publish one action frame                                            |
+| `warmed_up`            | True once every observation stream has produced at least one sample |
+| `send_safety_action()` | Emit the contract's declared safety action                          |
+| `reset_state()`        | Clear per-episode buffers between runs                              |
 
 Two properties of this boundary matter more than the API surface:
 
-**Bag/live parity.** Ingest, timestamping, and resampling are *the same code* offline and online. `TopicBridge.sample_frame()` and the bag porter emit byte-identical frames from the same messages, and upstream gates this with a `test_bag_live_parity.py`. This is the mechanism behind Rosetta's central claim — that a policy sees at deployment exactly what it saw in training. It is also, concretely, the thing a from-scratch C++ implementation gives up.
+**Bag/live parity.** Ingest, timestamping, and resampling are _the same code_ offline and online. `TopicBridge.sample_frame()` and the bag porter emit byte-identical frames from the same messages, and upstream gates this with a `test_bag_live_parity.py`. This is the mechanism behind Rosetta's central claim — that a policy sees at deployment exactly what it saw in training. It is also, concretely, the thing a from-scratch C++ implementation gives up.
 
 **It is pub/sub-agnostic by construction.** `FrameIO` deliberately names no ROS type. `TopicBridge` is the ROS 2 implementation; the docstring anticipates ROS 1, Zenoh, and MQTT implementations of the same five methods. So a policy written against frames is portable across transports, and testable with no middleware at all.
 
@@ -628,7 +628,7 @@ Reasonable when your node's lifecycle genuinely differs from "run a policy again
 
 ### 6.5 Level 3 — a genuinely separate C++ node
 
-This is the PEP shape from [§4.7](#47-integration-alternatives). Rosetta stays for record → port → train; the contract becomes a *specification* you re-implement in C++, and `rosetta` no longer runs at deployment time at all. Worked example: [§7.5](#75-option-3--a-c-inference-node).
+This is the PEP shape from [§4.7](#47-integration-alternatives). Rosetta stays for record → port → train; the contract becomes a _specification_ you re-implement in C++, and `rosetta` no longer runs at deployment time at all. Worked example: [§7.5](#75-option-3--a-c-inference-node).
 
 It is the only level that removes Python from the 50 Hz path, and therefore the only one that serves the performance argument. It is also the only one that reintroduces the failure Rosetta exists to prevent. From Rosetta's design document:
 
@@ -638,17 +638,17 @@ It is the only level that removes Python from the 50 Hz path, and therefore the 
 
 [§4.7](#47-integration-alternatives) flags this in one line under PEP-B. It deserves the detail, because the list is longer than "resize and convert units" and every item is a place where training and serving can silently diverge.
 
-| Contract feature | What the C++ path must reproduce |
-| --- | --- |
-| `select:` | Joint **selection and ordering** by name from `/joint_states` — positional, and `/joint_states` ordering is not guaranteed stable across backends |
-| `apply:` (observation) | `resize: [480, 480]`, `rad2deg`, in declaration order |
-| `apply:` (action) | The same operators **inverted and reversed** — see below |
+| Contract feature                            | What the C++ path must reproduce                                                                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `select:`                                   | Joint **selection and ordering** by name from `/joint_states` — positional, and `/joint_states` ordering is not guaranteed stable across backends                                     |
+| `apply:` (observation)                      | `resize: [480, 480]`, `rad2deg`, in declaration order                                                                                                                                 |
+| `apply:` (action)                           | The same operators **inverted and reversed** — see below                                                                                                                              |
 | `align: {strategy: hold, timeline: header}` | Per-stream resampling onto the frame clock, using header stamps where available and receive time where not (our `Float64MultiArray` action channel has no header, so it is `receive`) |
-| Warmup | Emit nothing until every observation stream has produced at least one sample |
-| Zero-fill | After warmup, a stream with no sample this tick fills zeros at its static dim, so frame shape stays constant |
-| `safety: hold` | Watchdog republishing the last valid command on timeout, deactivate, and cleanup |
-| Publish atomicity | Encode every stream first; publish only if all encodes succeed, so a failure never leaves a partial command on hardware |
-| Non-finite guard | A NaN/Inf from the policy drops the whole frame (throttled error) rather than reaching the arm; the watchdog then takes over |
+| Warmup                                      | Emit nothing until every observation stream has produced at least one sample                                                                                                          |
+| Zero-fill                                   | After warmup, a stream with no sample this tick fills zeros at its static dim, so frame shape stays constant                                                                          |
+| `safety: hold`                              | Watchdog republishing the last valid command on timeout, deactivate, and cleanup                                                                                                      |
+| Publish atomicity                           | Encode every stream first; publish only if all encodes succeed, so a failure never leaves a partial command on hardware                                                               |
+| Non-finite guard                            | A NaN/Inf from the policy drops the whole frame (throttled error) rather than reaching the arm; the watchdog then takes over                                                          |
 
 The inversion rule is the sharpest trap, and our own contract carries a warning about it:
 
@@ -660,13 +660,13 @@ apply:
 
 Recording runs this front-to-back: clamp (radians) → `rad2deg`. Serving runs it **back-to-front through the inverses**: `deg2rad` → clamp. So the clamp bounds the outgoing command in radians. [`so_arm101.yaml`](../../pai_data_collection/config/rosetta/so_arm101.yaml) spells out the consequence of getting it backwards: it "would clamp degrees to ±3.14 and destroy every command."
 
-Note also that the contract's territory *ends at the dataset boundary*. Normalisation from dataset statistics, batching, and tokenisation belong to the checkpoint's own pre/post-processors, which LeRobot saves next to the weights. A C++ inference node must therefore reproduce **both** halves: Rosetta's robot-side translation *and* whatever LeRobot's processors were doing on the model side. The ONNX export discussed in [§4.6](#46-the-onnx-export-blocker) has to either bake those in or expose them faithfully — which is exactly the "policy-specific preprocessing" difficulty the upstream export issue identifies.
+Note also that the contract's territory _ends at the dataset boundary_. Normalisation from dataset statistics, batching, and tokenisation belong to the checkpoint's own pre/post-processors, which LeRobot saves next to the weights. A C++ inference node must therefore reproduce **both** halves: Rosetta's robot-side translation _and_ whatever LeRobot's processors were doing on the model side. The ONNX export discussed in [§4.6](#46-the-onnx-export-blocker) has to either bake those in or expose them faithfully — which is exactly the "policy-specific preprocessing" difficulty the upstream export issue identifies.
 
 **Mitigation, if this route is taken:** parse the contract YAML in C++ rather than transcribing its effects into code. That keeps one source of truth and makes a schema change a load-time error instead of a silent behavioural drift. It is more work up front and much less work to live with. A cheaper partial measure is a parity test — replay a recorded bag through both paths and assert the frames match, which is the same guarantee upstream gets from `test_bag_live_parity.py`.
 
 ### 6.7 Choosing a level
 
-The three levels are not ranked; they answer different questions. The fork is what you want the separate inference node *for*.
+The three levels are not ranked; they answer different questions. The fork is what you want the separate inference node _for_.
 
 ```mermaid
 flowchart TD
@@ -680,7 +680,7 @@ flowchart TD
 - **Modularity** → **Level 1**. Clean, additive, and what the seam was designed for. No downside worth naming.
 - **Latency** → **Level 3**. Level 1 will not help: the frames still flow through Python.
 
-A hybrid is tempting — a Level 1 runner that forwards frames to a C++ inference node over a topic, keeping contract enforcement *and* getting a C++ engine. It works, but it adds a round trip back through Python and therefore cannot serve the latency goal. Worth it only if the C++ node exists for some other reason (an existing engine, a vendor runtime) and modularity is the real objective.
+A hybrid is tempting — a Level 1 runner that forwards frames to a C++ inference node over a topic, keeping contract enforcement _and_ getting a C++ engine. It works, but it adds a round trip back through Python and therefore cannot serve the latency goal. Worth it only if the C++ node exists for some other reason (an existing engine, a vendor runtime) and modularity is the real objective.
 
 ### 6.8 Consequences for the options in §4.7
 
@@ -694,7 +694,7 @@ This section does not overturn [§4.7](#47-integration-alternatives), but it sha
 
 ## 7. Building custom inference on Rosetta
 
-[§6](#6-substitution-points-what-a-separate-inference-node-can-reuse) argued *which* level of substitution fits which goal. This section is the practical counterpart: what each level looks like in code, what you must write yourself, and where the traps are. It uses the SO-ARM101 contract ([`so_arm101.yaml`](../../pai_data_collection/config/rosetta/so_arm101.yaml)) throughout.
+[§6](#6-substitution-points-what-a-separate-inference-node-can-reuse) argued _which_ level of substitution fits which goal. This section is the practical counterpart: what each level looks like in code, what you must write yourself, and where the traps are. It uses the SO-ARM101 contract ([`so_arm101.yaml`](../../pai_data_collection/config/rosetta/so_arm101.yaml)) throughout.
 
 > **Status of the examples.** The code below is written against the APIs pinned in this workspace: Rosetta `dfd07e4`, `lerobot-rosetta` `1ea49d6`, and LeRobot 0.6.0. It is **illustrative and has not been built or run here**. Package and class names such as `pai_policy_runners` and `OnnxPolicyRunner` are hypothetical. Rosetta signatures, entry-point groups, and behaviours are taken from the source and cited by module.
 
@@ -724,45 +724,45 @@ flowchart LR
 
 **Robot side, done by Rosetta:**
 
-| Step | What happens for SO-ARM101 | Where |
-| --- | --- | --- |
-| Decode | `sensor_msgs/Image` → HWC `uint8` **RGB**, whatever the wire encoding (`rgb8`, `bgr8`, …). `JointState` → `float64`. | `robots/ros2/decoders.py` |
-| `select` | Joint positions picked **by name** in contract order, not by index. | `robots/ros2/field_access.py` |
-| `apply` (forward) | `resize: [480, 480]` (nearest-neighbour, see [§7.5](#75-option-3--a-c-inference-node) for its exact convention), `rad2deg` | `contract/builtin_operators.py` |
-| Align | One `StreamBuffer` per stream, `hold` strategy, sampled on the 50 Hz frame clock using header stamps | `frames/resample.py` |
-| Warmup | `warmed_up` is false until every observation stream has delivered one sample | `TopicBridge.warmed_up` |
-| Zero-fill | After warmup, a missing stream is zero-filled at its static shape, and the missing/recovered transition is logged once | `frames/layout.py` |
-| Split + inverse `apply` | The action vector is split per publishing stream, then `deg2rad` → `clamp`, running the pipeline back-to-front through the inverses | `frames/codecs.py` (`encode_value`) |
-| Guards | A NaN or Inf drops the whole frame with a throttled error. Every stream is encoded before any is published. Publishers only fire while the lifecycle node is active. | `TopicBridge.publish_frame` |
-| Safety | A watchdog sends the contract's `safety: hold` command if no action arrives for 2 frame periods | `TopicBridge._on_watchdog` |
+| Step                    | What happens for SO-ARM101                                                                                                                                           | Where                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Decode                  | `sensor_msgs/Image` → HWC `uint8` **RGB**, whatever the wire encoding (`rgb8`, `bgr8`, …). `JointState` → `float64`.                                                 | `robots/ros2/decoders.py`           |
+| `select`                | Joint positions picked **by name** in contract order, not by index.                                                                                                  | `robots/ros2/field_access.py`       |
+| `apply` (forward)       | `resize: [480, 480]` (nearest-neighbour, see [§7.5](#75-option-3--a-c-inference-node) for its exact convention), `rad2deg`                                           | `contract/builtin_operators.py`     |
+| Align                   | One `StreamBuffer` per stream, `hold` strategy, sampled on the 50 Hz frame clock using header stamps                                                                 | `frames/resample.py`                |
+| Warmup                  | `warmed_up` is false until every observation stream has delivered one sample                                                                                         | `TopicBridge.warmed_up`             |
+| Zero-fill               | After warmup, a missing stream is zero-filled at its static shape, and the missing/recovered transition is logged once                                               | `frames/layout.py`                  |
+| Split + inverse `apply` | The action vector is split per publishing stream, then `deg2rad` → `clamp`, running the pipeline back-to-front through the inverses                                  | `frames/codecs.py` (`encode_value`) |
+| Guards                  | A NaN or Inf drops the whole frame with a throttled error. Every stream is encoded before any is published. Publishers only fire while the lifecycle node is active. | `TopicBridge.publish_frame`         |
+| Safety                  | A watchdog sends the contract's `safety: hold` command if no action arrives for 2 frame periods                                                                      | `TopicBridge._on_watchdog`          |
 
 **Model side, not done by Rosetta.** In today's LeRobot path, LeRobot does all of this inside the policy server:
 
-| Step | In the LeRobot path today | Who does it in a custom path |
-| --- | --- | --- |
-| Image to tensor | `uint8` HWC → `float32` CHW in `[0, 1]` (`async_inference/helpers.py`, `prepare_image`) | You |
-| Normalisation | Mean/std (or min/max) from dataset statistics, per the checkpoint's `normalization_mapping`, loaded by `make_pre_post_processors` from the checkpoint | You. The statistics must be the ones the model was trained with. |
-| Batching, device placement, tokenising `task` | Same processor pipeline | You |
-| Unnormalisation | Postprocessor, back to dataset space (degrees) | You |
-| Chunking | `RobotClient` queues `actions_per_chunk` actions, re-requests at `chunk_size_threshold`, and blends overlapping chunks with `aggregate_fn_name` | You, or a deliberate simplification |
-| Pacing | `RobotClient`'s control loop at the contract fps | You |
+| Step                                          | In the LeRobot path today                                                                                                                             | Who does it in a custom path                                     |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Image to tensor                               | `uint8` HWC → `float32` CHW in `[0, 1]` (`async_inference/helpers.py`, `prepare_image`)                                                               | You                                                              |
+| Normalisation                                 | Mean/std (or min/max) from dataset statistics, per the checkpoint's `normalization_mapping`, loaded by `make_pre_post_processors` from the checkpoint | You. The statistics must be the ones the model was trained with. |
+| Batching, device placement, tokenising `task` | Same processor pipeline                                                                                                                               | You                                                              |
+| Unnormalisation                               | Postprocessor, back to dataset space (degrees)                                                                                                        | You                                                              |
+| Chunking                                      | `RobotClient` queues `actions_per_chunk` actions, re-requests at `chunk_size_threshold`, and blends overlapping chunks with `aggregate_fn_name`       | You, or a deliberate simplification                              |
+| Pacing                                        | `RobotClient`'s control loop at the contract fps                                                                                                      | You                                                              |
 
 So the answer to "do the contract and `TopicBridge` resolve pre- and post-processing?" is **yes for everything between ROS and the dataset, no for everything between the dataset and the network**. The second half is exactly what an ONNX export has to bake in or expose ([§4.6](#46-the-onnx-export-blocker)), and it is the most common place for a custom runner to go subtly wrong. Normalising with the wrong statistics, or forgetting to unnormalise, produces confident but meaningless actions.
 
 ### 7.2 The three options at a glance
 
-| | **Option 1**: custom `PolicyRunner` | **Option 2**: own node + `TopicBridge` | **Option 3**: C++ node |
-| --- | --- | --- | --- |
-| Contract parsing and validation | Rosetta | Rosetta (`load_contract`) | **You** |
-| Decode / select / apply / align | Rosetta | Rosetta | **You** |
-| Warmup, zero-fill, NaN guard, atomic publish | Rosetta | Rosetta | **You** |
-| Safety watchdog | Rosetta | Rosetta (you call `send_safety_action` on deactivate) | **You** |
-| `run_policy` action, start/cancel services, feedback | Rosetta | **You**, or omit | **You**, or omit |
-| Contract resolved from the checkpoint when `contract_path` is empty | Rosetta | You can call `find_contract_for_pretrained` | **You** |
-| Model-side pre/post ([§7.1](#71-what-the-contract-and-topicbridge-handle-and-what-they-dont)) | **You** | **You** | **You** |
-| Bag/live parity | By construction | By construction | **Must be tested** |
-| Python in the 50 Hz path | Yes | Yes | No |
-| Build system | `ament_python` | `ament_python` | `ament_cmake`, the first C++ in this repo |
+|                                                                                               | **Option 1**: custom `PolicyRunner` | **Option 2**: own node + `TopicBridge`                | **Option 3**: C++ node                    |
+| --------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------- | ----------------------------------------- |
+| Contract parsing and validation                                                               | Rosetta                             | Rosetta (`load_contract`)                             | **You**                                   |
+| Decode / select / apply / align                                                               | Rosetta                             | Rosetta                                               | **You**                                   |
+| Warmup, zero-fill, NaN guard, atomic publish                                                  | Rosetta                             | Rosetta                                               | **You**                                   |
+| Safety watchdog                                                                               | Rosetta                             | Rosetta (you call `send_safety_action` on deactivate) | **You**                                   |
+| `run_policy` action, start/cancel services, feedback                                          | Rosetta                             | **You**, or omit                                      | **You**, or omit                          |
+| Contract resolved from the checkpoint when `contract_path` is empty                           | Rosetta                             | You can call `find_contract_for_pretrained`           | **You**                                   |
+| Model-side pre/post ([§7.1](#71-what-the-contract-and-topicbridge-handle-and-what-they-dont)) | **You**                             | **You**                                               | **You**                                   |
+| Bag/live parity                                                                               | By construction                     | By construction                                       | **Must be tested**                        |
+| Python in the 50 Hz path                                                                      | Yes                                 | Yes                                                   | No                                        |
+| Build system                                                                                  | `ament_python`                      | `ament_python`                                        | `ament_cmake`, the first C++ in this repo |
 
 ### 7.3 Option 1 — a custom `PolicyRunner`
 
@@ -1149,12 +1149,12 @@ Option 3 amounts to rewriting Rosetta's **online half** in C++: contract parsing
 
 Some of that can be avoided, and most of it would be better done upstream once than privately here. Four things Rosetta could provide, roughly in order of cost:
 
-| | What Rosetta would provide | What it removes from Option 3 | Cost upstream |
-| --- | --- | --- | --- |
-| **A** | A conformance suite | Nothing, but every reimplementation becomes testable | Low |
-| **B** | Lowering the contract's `apply` operators to ONNX | All the numeric operators | Medium |
-| **C** | An official C++ contract runtime | Effectively all of it | High |
-| **D** | A standalone frame-publisher node | All the contract logic, at the price of a Python hop | Low–medium |
+|       | What Rosetta would provide                        | What it removes from Option 3                        | Cost upstream |
+| ----- | ------------------------------------------------- | ---------------------------------------------------- | ------------- |
+| **A** | A conformance suite                               | Nothing, but every reimplementation becomes testable | Low           |
+| **B** | Lowering the contract's `apply` operators to ONNX | All the numeric operators                            | Medium        |
+| **C** | An official C++ contract runtime                  | Effectively all of it                                | High          |
+| **D** | A standalone frame-publisher node                 | All the contract logic, at the price of a Python hop | Low–medium    |
 
 #### A. A conformance suite
 
@@ -1166,11 +1166,11 @@ It does not remove any code from Option 3. It replaces "we believe it matches" w
 
 Every built-in operator has an exact ONNX equivalent:
 
-| Operator | Direction | ONNX lowering |
-| --- | --- | --- |
-| `resize: [h, w]` | Observation (forward) | Two `Gather`s (rows, then columns) with **indices computed by Rosetta**, `round(linspace(0, n-1, rn))` |
-| `rad2deg` / inverse | Both | `Mul` by `180/π` or `π/180` |
-| `clamp` | Both | `Clip` |
+| Operator            | Direction             | ONNX lowering                                                                                          |
+| ------------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `resize: [h, w]`    | Observation (forward) | Two `Gather`s (rows, then columns) with **indices computed by Rosetta**, `round(linspace(0, n-1, rn))` |
+| `rad2deg` / inverse | Both                  | `Mul` by `180/π` or `π/180`                                                                            |
+| `clamp`             | Both                  | `Clip`                                                                                                 |
 
 Precomputing the resize indices matters. ONNX's own `Resize` op in nearest mode offers `round_prefer_floor` and `round_prefer_ceil`, and neither matches NumPy's round-half-to-even, so a `Gather` with indices taken from the reference implementation is the only exact lowering.
 
@@ -1233,12 +1233,12 @@ PEP removes a process boundary and an entire serialisation protocol. Buffer back
 
 A staged path, where each stage is independently valuable and none is wasted if the next is abandoned:
 
-| Stage | Work | Unblocks | Gate to proceed |
-| --- | --- | --- | --- |
-| **0** | Prototype ACT → ONNX export with numerical-equivalence tests (PEP-A). Push `rmw_zenoh_cpp` ≥ 0.10.5 to RoboStack (BUF-1). | Everything | Export matches the torch checkpoint within tolerance |
-| **1** | Measure the real baseline: instrument the current path end-to-end; run a transport-only buffer benchmark on FastRTPS (BUF-2) at 640×480 and 1280×720. | Evidence-based prioritisation | Numbers confirm (or refute) that Python + gRPC dominate |
-| **2** | `pai_policy_execution`: four plugins, PEP vendored at a pinned commit, opt-in launch alongside Rosetta (PEP-B). Solve the chunking mismatch explicitly. | The C++ endpoint everything else needs | Policy runs and matches the Rosetta path behaviourally |
-| **3** | Revisit buffer backends now that a C++ consumer exists (BUF-3), and revisit the controller-hosted form (PEP-C) once PEP's node-type and async-inference gaps are resolved upstream. | — | Stage 1 numbers justify the cost |
+| Stage | Work                                                                                                                                                                                | Unblocks                               | Gate to proceed                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------- |
+| **0** | Prototype ACT → ONNX export with numerical-equivalence tests (PEP-A). Push `rmw_zenoh_cpp` ≥ 0.10.5 to RoboStack (BUF-1).                                                           | Everything                             | Export matches the torch checkpoint within tolerance    |
+| **1** | Measure the real baseline: instrument the current path end-to-end; run a transport-only buffer benchmark on FastRTPS (BUF-2) at 640×480 and 1280×720.                               | Evidence-based prioritisation          | Numbers confirm (or refute) that Python + gRPC dominate |
+| **2** | `pai_policy_execution`: four plugins, PEP vendored at a pinned commit, opt-in launch alongside Rosetta (PEP-B). Solve the chunking mismatch explicitly.                             | The C++ endpoint everything else needs | Policy runs and matches the Rosetta path behaviourally  |
+| **3** | Revisit buffer backends now that a C++ consumer exists (BUF-3), and revisit the controller-hosted form (PEP-C) once PEP's node-type and async-inference gaps are resolved upstream. | —                                      | Stage 1 numbers justify the cost                        |
 
 Stage 0 is cheap and is the long pole. Stage 1 is cheap and replaces every estimate in this document with a measurement. Neither commits us to anything.
 
@@ -1272,16 +1272,16 @@ The through-line: **this repository's deployment latency is a Python and IPC pro
 
 ## 10. Appendix: version and availability matrix
 
-| Component | Upstream | Lyrical release | RoboStack Lyrical | Note |
-| --- | --- | --- | --- | --- |
-| `rosidl_buffer*` (core) | `ros2/rosidl` | 5.2.1 | ✅ 5.2.1 | Already in `pixi.lock` |
-| `rosidl_buffer_backends` | `ros2/rosidl_buffer_backends` | 0.1.2-1 | ❌ | Source build required |
-| `rmw_fastrtps_cpp` | `ros2/rmw_fastrtps` | 9.4.9 | ✅ 9.4.8 | Buffer support since 9.4.6 |
-| `rmw_zenoh_cpp` | `ros2/rmw_zenoh` | 0.10.5 | ⚠️ **0.10.4** | **Buffer support needs 0.10.5** |
-| `onnxruntime_vendor` | `ros-controls/onnxruntime_vendor` | 0.1.0-2 | ❌ | Use conda `onnxruntime-cpp` 1.29.0 with `AMENT_VENDOR_POLICY=NEVER_VENDOR` |
-| `ros2_policy_execution_pipeline` | `saikishor/…` | ❌ not released | ❌ | Source build; `version` `0.0.0` |
-| `lerobot` | `huggingface/lerobot` | — | PyPI `0.6.0` (pinned; latest `0.6.1`) | No ONNX export in 0.6.x; roadmapped for 0.7.0 |
-| `rosetta` / `lerobot_rosetta` | `iblnkn/rosetta`, `iblnkn/lerobot-rosetta` | ❌ not released | ❌ | Source build via `pai.repos`; both `0.2.0` |
+| Component                        | Upstream                                   | Lyrical release | RoboStack Lyrical                     | Note                                                                       |
+| -------------------------------- | ------------------------------------------ | --------------- | ------------------------------------- | -------------------------------------------------------------------------- |
+| `rosidl_buffer*` (core)          | `ros2/rosidl`                              | 5.2.1           | ✅ 5.2.1                              | Already in `pixi.lock`                                                     |
+| `rosidl_buffer_backends`         | `ros2/rosidl_buffer_backends`              | 0.1.2-1         | ❌                                    | Source build required                                                      |
+| `rmw_fastrtps_cpp`               | `ros2/rmw_fastrtps`                        | 9.4.9           | ✅ 9.4.8                              | Buffer support since 9.4.6                                                 |
+| `rmw_zenoh_cpp`                  | `ros2/rmw_zenoh`                           | 0.10.5          | ⚠️ **0.10.4**                         | **Buffer support needs 0.10.5**                                            |
+| `onnxruntime_vendor`             | `ros-controls/onnxruntime_vendor`          | 0.1.0-2         | ❌                                    | Use conda `onnxruntime-cpp` 1.29.0 with `AMENT_VENDOR_POLICY=NEVER_VENDOR` |
+| `ros2_policy_execution_pipeline` | `saikishor/…`                              | ❌ not released | ❌                                    | Source build; `version` `0.0.0`                                            |
+| `lerobot`                        | `huggingface/lerobot`                      | —               | PyPI `0.6.0` (pinned; latest `0.6.1`) | No ONNX export in 0.6.x; roadmapped for 0.7.0                              |
+| `rosetta` / `lerobot_rosetta`    | `iblnkn/rosetta`, `iblnkn/lerobot-rosetta` | ❌ not released | ❌                                    | Source build via `pai.repos`; both `0.2.0`                                 |
 
 ### References
 

@@ -19,22 +19,22 @@ Rosetta is a ROS 2 ↔ robot-learning bridge. One YAML file per robot, the **con
 
 ### The packages
 
-| Package | Role | Depends on LeRobot? |
-| --- | --- | --- |
-| `rosetta` | The core: contract, frames, ROS 2 nodes, the dataset converter (`rosetta_port`), plugin registries | No |
-| `rosetta_interfaces` | ROS 2 actions and services (`RunPolicy`, `RecordEpisode`, …) | No |
-| `lerobot_rosetta` | Plugs LeRobot into Rosetta: dataset writer, policy runner, policy server | Yes |
-| `lerobot_robot_rosetta` | Plugs a Rosetta robot into LeRobot's tools (`--robot.type=rosetta`) | Yes |
+| Package                 | Role                                                                                               | Depends on LeRobot? |
+| ----------------------- | -------------------------------------------------------------------------------------------------- | ------------------- |
+| `rosetta`               | The core: contract, frames, ROS 2 nodes, the dataset converter (`rosetta_port`), plugin registries | No                  |
+| `rosetta_interfaces`    | ROS 2 actions and services (`RunPolicy`, `RecordEpisode`, …)                                       | No                  |
+| `lerobot_rosetta`       | Plugs LeRobot into Rosetta: dataset writer, policy runner, policy server                           | Yes                 |
+| `lerobot_robot_rosetta` | Plugs a Rosetta robot into LeRobot's tools (`--robot.type=rosetta`)                                | Yes                 |
 
 The core never imports LeRobot. LeRobot is attached only through plugins.
 
 ### The layers
 
-| Layer | Pieces | Tied to an ML framework? |
-| --- | --- | --- |
-| Offline | `episode_recorder_node` (bags), `rosetta_port` (bags → dataset) | No. The dataset format is a plugin (`DatasetWriter`). |
-| **The core layer** | **Contract + `TopicBridge`**: topics ↔ frames, in both directions | **No. This is the part worth keeping.** |
-| Online | `policy_runner_node` + a `PolicyRunner` plugin | Only the plugin |
+| Layer              | Pieces                                                            | Tied to an ML framework?                              |
+| ------------------ | ----------------------------------------------------------------- | ----------------------------------------------------- |
+| Offline            | `episode_recorder_node` (bags), `rosetta_port` (bags → dataset)   | No. The dataset format is a plugin (`DatasetWriter`). |
+| **The core layer** | **Contract + `TopicBridge`**: topics ↔ frames, in both directions | **No. This is the part worth keeping.**               |
+| Online             | `policy_runner_node` + a `PolicyRunner` plugin                    | Only the plugin                                       |
 
 ### Frames and "dataset space"
 
@@ -48,26 +48,26 @@ These values are in **dataset space**: exactly what was written into the trainin
 
 ### What Rosetta does, and what it doesn't
 
-| Rosetta handles (robot side) | You handle (model side) |
-| --- | --- |
-| Decoding images to RGB arrays, picking joints by name | Converting images to float tensors in [0, 1] |
-| `resize`, radians ↔ degrees, clamping, from the contract | Normalising with the training dataset's statistics |
-| Resampling every stream onto the 50 Hz frame clock | Running the model (device, batching) |
-| Waiting until every stream has data; zero-filling dropouts | Unnormalising the outputs |
-| Rejecting NaN/Inf commands; publishing all streams or none | Queueing and blending action chunks |
-| Safety watchdog: hold the last command if actions stop | Pacing the control loop |
+| Rosetta handles (robot side)                               | You handle (model side)                            |
+| ---------------------------------------------------------- | -------------------------------------------------- |
+| Decoding images to RGB arrays, picking joints by name      | Converting images to float tensors in [0, 1]       |
+| `resize`, radians ↔ degrees, clamping, from the contract   | Normalising with the training dataset's statistics |
+| Resampling every stream onto the 50 Hz frame clock         | Running the model (device, batching)               |
+| Waiting until every stream has data; zero-filling dropouts | Unnormalising the outputs                          |
+| Rejecting NaN/Inf commands; publishing all streams or none | Queueing and blending action chunks                |
+| Safety watchdog: hold the last command if actions stop     | Pacing the control loop                            |
 
 Today LeRobot does the right-hand column inside its policy server. **Any alternative engine has to do it too.** Normalising with the wrong statistics produces confident but meaningless actions, with no error to point at the cause.
 
 ### Extension points
 
-| Extension point | What you provide | How it's selected |
-| --- | --- | --- |
-| `PolicyRunner` | Online inference: control loop and model | `framework` parameter of `policy_runner_node` |
-| `DatasetWriter` | Offline dataset format | `rosetta_port --framework <name>` |
-| Operators | New `apply:` transforms in the contract | Named in the contract |
-| Codecs | Support for new ROS message types | The channel's message type, or a path in the contract |
-| `FrameIO` | A non-ROS 2 transport (a Python interface with no registry) | Whoever hosts the runner |
+| Extension point | What you provide                                            | How it's selected                                     |
+| --------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
+| `PolicyRunner`  | Online inference: control loop and model                    | `framework` parameter of `policy_runner_node`         |
+| `DatasetWriter` | Offline dataset format                                      | `rosetta_port --framework <name>`                     |
+| Operators       | New `apply:` transforms in the contract                     | Named in the contract                                 |
+| Codecs          | Support for new ROS message types                           | The channel's message type, or a path in the contract |
+| `FrameIO`       | A non-ROS 2 transport (a Python interface with no registry) | Whoever hosts the runner                              |
 
 All of these except `FrameIO` are standard Python entry points: installing a package that registers one is enough. Unknown or broken plugins fail loudly when they load.
 
@@ -108,16 +108,16 @@ A C++ node subscribes to the cameras and `/joint_states`, runs the model (for ex
 
 ### Comparison
 
-| | Option 1: `PolicyRunner` | Option 2: own node | Option 3: C++ node |
-| --- | --- | --- | --- |
-| Contract + robot-side processing | Rosetta | Rosetta | **We re-implement** |
-| Safety watchdog | Rosetta | Rosetta, plus our deactivate handling | **We re-implement** |
-| Action server / services | Rosetta | We write or omit | We write or omit |
-| Model-side pre/post | We write | We write | We write |
-| Train/serve parity | Guaranteed | Guaranteed | **Must be tested** |
-| Python in the 50 Hz path | Yes | Yes | No |
-| Effort | Low | Low–medium | High |
-| Best for | Swapping the engine, remote inference | Custom node lifecycles | Hard latency requirements |
+|                                  | Option 1: `PolicyRunner`              | Option 2: own node                    | Option 3: C++ node        |
+| -------------------------------- | ------------------------------------- | ------------------------------------- | ------------------------- |
+| Contract + robot-side processing | Rosetta                               | Rosetta                               | **We re-implement**       |
+| Safety watchdog                  | Rosetta                               | Rosetta, plus our deactivate handling | **We re-implement**       |
+| Action server / services         | Rosetta                               | We write or omit                      | We write or omit          |
+| Model-side pre/post              | We write                              | We write                              | We write                  |
+| Train/serve parity               | Guaranteed                            | Guaranteed                            | **Must be tested**        |
+| Python in the 50 Hz path         | Yes                                   | Yes                                   | No                        |
+| Effort                           | Low                                   | Low–medium                            | High                      |
+| Best for                         | Swapping the engine, remote inference | Custom node lifecycles                | Hard latency requirements |
 
 ## 3. Avoiding a C++ rewrite: what Rosetta could provide
 
@@ -147,4 +147,4 @@ Because the seams are independent, **datasets and inference can be decoupled sep
 3. **Prototype an ACT → ONNX export**, with a numerical equivalence test against the torch checkpoint. Option 3 needs it, and it is useful on its own (TensorRT, edge deployment).
 4. **Only if measurements still justify C++:** ask Rosetta upstream for conformance tests and ONNX operator export (A + B) before writing a C++ node.
 
-*The full analysis, with code examples for each option and source references, is in `docs/research/policy-execution-and-buffer-backends.md` (§6–§7).*
+_The full analysis, with code examples for each option and source references, is in `docs/research/policy-execution-and-buffer-backends.md` (§6–§7)._
