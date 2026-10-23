@@ -21,6 +21,7 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>mujoco_ros2_control</exec_depend>
   <exec_depend>pai_assets</exec_depend>
+  <exec_depend>pai_data_collection</exec_depend>
   <exec_depend>pai_description</exec_depend>
   <exec_depend>pai_phone_teleop</exec_depend>
   <exec_depend>pai_policy_inference</exec_depend>
