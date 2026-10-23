@@ -174,6 +174,15 @@ pink = ">=3.1,<5"
 nodejs = ">=18"
 ros-lyrical-rosbridge-suite = ">=4.0.0,<5"
 cbor2 = ">=6.1.2,<7"
+# Policy I/O (pai_tensor_msgs, pai_policy_inference, pai_policy_io)
+ros-lyrical-rosidl-default-generators = "*"
+ros-lyrical-rosidl-default-runtime = "*"
+ros-lyrical-rclcpp-components = "*"
+ros-lyrical-ament-cmake-gtest = "*"
+yaml-cpp = ">=0.8,<0.9"
+onnxruntime-cpp = ">=1.20,<2"
+onnxruntime = ">=1.20,<2"
+onnx = "*"
 
 # Force past LeRobot's upper bounds: no py314 numpy<2.3, and gz-msgs pins protobuf into the conda solve.
 [pypi-options.dependency-overrides]
@@ -211,6 +220,8 @@ CMAKE_PREFIX_PATH = "${CONDA_PREFIX}"
 # Gazebo rendering engine plugin path
 GZ_RENDERING_ENGINE_PATH = "${CONDA_PREFIX}/lib/gz-rendering-10/engine-plugins"
 ROS_DISTRO = "lyrical"
+# The host has no make; build with Ninja (declared in dependencies).
+CMAKE_GENERATOR = "Ninja"
 # Force ROS 2 to use Zenoh middleware
 RMW_IMPLEMENTATION = "rmw_zenoh_cpp"
 # uv/PyPI: large wheels (e.g. torch) need a longer per-request timeout than the default 30s
