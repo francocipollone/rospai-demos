@@ -37,21 +37,25 @@ Full documentation lives in [`docs/`](docs/README.md). Highlights:
 | [MCP Interface](docs/mcp.md)                                      | Use an AI agent to control, introspect, or debug the robot via [ROS-MCP](https://github.com/robotmcp/ros-mcp-server) |
 | [End-to-End Learning Pipeline](docs/demos/end-to-end-pipeline.md) | Record → Train → Deploy with Rosetta and LeRobot                                                                     |
 | [Try a Pre-trained Policy](docs/demos/pretrained-demo.md)         | Skip the slow loop — run a pre-trained ACT policy in Gazebo in minutes                                               |
+| [ONNX Inference](docs/demos/onnx-inference.md)                    | Export the pre-trained ACT policy to ONNX and run it with the C++ Policy I/O inference node                          |
 | [Contributing](docs/contributing.md)                              | Linting and pre-commit hooks                                                                                         |
 
 ## Packages
 
 ### This repository
 
-| Package                 | Description                                                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **pai_bringup**         | Main bringup package — launches the SO-ARM101 in Gazebo, MuJoCo, or on real hardware with ros2_control, RViz, camera bridge, and optional LeRobot inference    |
-| **pai_leader_teleop**   | Leader-follower teleoperation — brings up a physical leader SO-ARM101 to control a follower arm via ros2_control                                               |
-| **pai_rviz_teleop**     | Interactive-marker differential IK teleoperation in RViz                                                                                                       |
-| **pai_phone_teleop**    | Phone-based 6-DoF pose teleoperation over WebXR                                                                                                                |
-| **pai_data_collection** | Configuration and scripts for collecting demonstration datasets via the Rosetta ROS 2–LeRobot bridge                                                           |
-| **pai_description**     | Scene-level SDF world definitions — single source of truth for both Gazebo (loaded natively) and MuJoCo (converted to MJCF at launch time via `sdformat_mjcf`) |
-| **pai_assets**          | Shared 3D model assets (meshes, textures) used by the demo scenes                                                                                              |
+| Package                  | Description                                                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **pai_bringup**          | Main bringup package — launches the SO-ARM101 in Gazebo, MuJoCo, or on real hardware with ros2_control, RViz, camera bridge, and optional LeRobot inference    |
+| **pai_leader_teleop**    | Leader-follower teleoperation — brings up a physical leader SO-ARM101 to control a follower arm via ros2_control                                               |
+| **pai_rviz_teleop**      | Interactive-marker differential IK teleoperation in RViz                                                                                                       |
+| **pai_phone_teleop**     | Phone-based 6-DoF pose teleoperation over WebXR                                                                                                                |
+| **pai_data_collection**  | Configuration and scripts for collecting demonstration datasets via the Rosetta ROS 2–LeRobot bridge                                                           |
+| **pai_description**      | Scene-level SDF world definitions — single source of truth for both Gazebo (loaded natively) and MuJoCo (converted to MJCF at launch time via `sdformat_mjcf`) |
+| **pai_assets**           | Shared 3D model assets (meshes, textures) used by the demo scenes                                                                                              |
+| **pai_tensor_msgs**      | Policy I/O messages — `Tensor`, `TensorList` (observations and action chunks) and `PipelineInfo` (pipeline hash)                                               |
+| **pai_policy_io**        | Policy I/O tooling — policy signatures and pipeline hashes, the Rosetta TensorList bridge, and the LeRobot ACT → ONNX exporter                                 |
+| **pai_policy_inference** | Generic ONNX Runtime inference node — runs an exported policy on `/policy/observation` and publishes `/policy/action_chunk`                                    |
 
 ### External (imported via `pai.repos`)
 

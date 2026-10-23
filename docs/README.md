@@ -34,10 +34,11 @@ For running on a physical SO-ARM101.
 
 ## Learning pipeline (demos)
 
-| Guide                                                        | What it covers                                                         |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| [End-to-End Learning Pipeline](demos/end-to-end-pipeline.md) | Record → Train → Deploy with Rosetta and LeRobot                       |
-| [Try a Pre-trained Policy](demos/pretrained-demo.md)         | Skip the slow loop — run a pre-trained ACT policy in Gazebo in minutes |
+| Guide                                                        | What it covers                                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| [End-to-End Learning Pipeline](demos/end-to-end-pipeline.md) | Record → Train → Deploy with Rosetta and LeRobot                                            |
+| [Try a Pre-trained Policy](demos/pretrained-demo.md)         | Skip the slow loop — run a pre-trained ACT policy in Gazebo in minutes                      |
+| [ONNX Inference](demos/onnx-inference.md)                    | Export the pre-trained ACT policy to ONNX and run it with the C++ Policy I/O inference node |
 
 ## Contributing
 
