@@ -1,0 +1,46 @@
+# policy_signature.yaml — SO-ARM101, ACT (example)
+signature_version: 1
+robot: so_arm101
+fps: 50
+
+observations:
+  observation.images.wrist:
+    { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
+  observation.images.static:
+    { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
+  observation.state:
+    dtype: float32
+    units: si
+    joints:
+      [
+        shoulder_pan_joint,
+        shoulder_lift_joint,
+        elbow_flex_joint,
+        wrist_flex_joint,
+        wrist_roll_joint,
+        gripper_joint,
+      ]
+
+action:
+  dtype: float32
+  units: si
+  action_type: absolute_joint
+  joints:
+    [
+      shoulder_pan_joint,
+      shoulder_lift_joint,
+      elbow_flex_joint,
+      wrist_flex_joint,
+      wrist_roll_joint,
+      gripper_joint,
+    ]
+  kinds:
+    [continuous, continuous, continuous, continuous, continuous, continuous]
+
+execution:
+  horizon: 100
+  execute_steps: 30
+  strategy: blend
+  max_staleness_s: 0.2
+
+pipeline_hash: "sha256:0000"

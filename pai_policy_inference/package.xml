@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>pai_policy_inference</name>
+  <version>0.1.0</version>
+  <description>
+    Policy inference core: loads a policy_signature.yaml, provides zero-copy
+    views over pai_tensor_msgs tensors, and (in later tasks) runs an exported
+    policy through ONNX Runtime.
+  </description>
+  <maintainer email="franco.cipollone@ekumenlabs.com">Franco Cipollone</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>pai_tensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>yaml-cpp</depend>
+  <!-- onnxruntime: provided by the pixi environment (conda-forge onnxruntime-cpp); no rosdep key -->
+
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
