@@ -26,12 +26,17 @@ class FakeLogger:
     def __init__(self):
         """Create a logger with no recorded warnings."""
         self.warnings = []
+        self.errors = []
+
+    def error(self, msg, **_kwargs):
+        """Record an error."""
+        self.errors.append(msg)
 
     def warning(self, msg, **_kwargs):
         """Record a warning."""
         self.warnings.append(msg)
 
-    info = error = debug = warning
+    info = debug = warning
 
 
 class FakeClock:
@@ -74,6 +79,7 @@ class FakeNode:
         self.timer_callback = None
         self.sub_callback = None
         self.destroyed = []
+        self.errors = []
         self.logger = FakeLogger()
 
     def declare_parameter(self, name, value=None, descriptor=None):
@@ -99,7 +105,13 @@ class FakeNode:
     def create_publisher(self, _msg_type, topic, qos):
         """Return a recording publisher."""
         self.qos[topic] = qos
-        return FakePublisher(self.published.setdefault(topic, []))
+        pub = FakePublisher(self.published.setdefault(topic, []))
+        pub.topic = topic
+        return pub
+
+    def destroy_publisher(self, pub):
+        """Record destruction."""
+        self.destroyed.append(pub.topic)
 
     def create_subscription(self, _msg_type, _topic, callback, _qos, callback_group=None):
         """Remember the subscription callback."""
@@ -135,9 +147,17 @@ class FakeFrames:
         """Create the frame source."""
         self.warmed_up = warmed_up
         self.published = []
+        self.resets = 0
+        self.fail_sampling = False
+
+    def reset_state(self):
+        """Count resets."""
+        self.resets += 1
 
     def sample_frame(self):
         """Return two images, a float64 state and a key outside the signature."""
+        if self.fail_sampling:
+            raise RuntimeError("sampling failed")
         image = np.zeros((480, 480, 3), np.uint8)
         return {
             "observation.images.wrist": image,
@@ -211,6 +231,7 @@ def test_tick_publishes_observation_in_signature_dtypes_and_follows_chunk(node):
     thread.join(2)
     assert box["result"].success and box["result"].message == "Stopped"
     assert sorted(node.destroyed) == ["subscription", "timer"]
+    assert frames.resets == 1
 
 
 def test_tick_before_warmup_publishes_nothing(node):
@@ -235,5 +256,59 @@ def test_chunk_with_wrong_dim_is_ignored(node):
     assert node.logger.warnings
     node.fire_timer()
     assert frames.published == []
+    stop.set()
+    thread.join(2)
+
+
+def test_tick_exception_is_logged_not_raised(node):
+    """An exception while sampling is logged and the tick is skipped."""
+    runner, frames = TensorListBridgeRunner(), FakeFrames()
+    runner.setup(node, load_contract(str(CONTRACT)))
+    stop, thread, _ = start(runner, node, frames)
+    frames.fail_sampling = True
+    node.fire_timer()
+    assert node.logger.errors and frames.published == []
+    stop.set()
+    thread.join(2)
+
+
+def test_teardown_destroys_publishers_and_is_safe_before_setup(node):
+    """Teardown destroys both publishers; calling it without setup or twice does nothing."""
+    TensorListBridgeRunner().teardown()
+    runner = TensorListBridgeRunner()
+    runner.setup(node, load_contract(str(CONTRACT)))
+    runner.teardown()
+    runner.teardown()
+    assert sorted(node.destroyed) == sorted([OBS_TOPIC, runner.pipeline_info_topic])
+
+
+def test_concurrent_chunks_ticks_and_feedback_do_not_raise(node):
+    """Pushing chunks while ticking and polling feedback from other threads never raises."""
+    runner, frames = TensorListBridgeRunner(), FakeFrames()
+    runner.setup(node, load_contract(str(CONTRACT)))
+    stop, thread, _ = start(runner, node, frames)
+    errors = []
+
+    def hammer(fn):
+        try:
+            for _ in range(300):
+                fn()
+        except Exception as err:
+            errors.append(err)
+
+    chunks = iter(range(1, 10**6))
+    workers = [
+        threading.Thread(target=hammer, args=(f,))
+        for f in (
+            lambda: node.deliver(make_chunk(Time(sec=next(chunks)), 4, 0.5)),
+            runner.feedback,
+            node.fire_timer,
+        )
+    ]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join(5)
+    assert errors == [] and node.logger.errors == []
     stop.set()
     thread.join(2)

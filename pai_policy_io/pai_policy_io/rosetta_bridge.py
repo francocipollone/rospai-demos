@@ -43,6 +43,8 @@ class TensorListBridgeRunner:
         self._obs_pub = None
         self._casts: dict[str, np.dtype] = {}
         self._published = 0
+        self._lock = threading.Lock()
+        self._info_pub = None
         self.observation_topic = ""
         self.action_chunk_topic = ""
         self.pipeline_info_topic = ""
@@ -66,19 +68,21 @@ class TensorListBridgeRunner:
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
         self._obs_pub = node.create_publisher(TensorList, self.observation_topic, reliable)
-        info_pub = node.create_publisher(PipelineInfo, self.pipeline_info_topic, latched)
+        self._info_pub = node.create_publisher(PipelineInfo, self.pipeline_info_topic, latched)
         info = PipelineInfo()
         info.header.stamp = node.get_clock().now().to_msg()
         info.signature_yaml = yaml.safe_dump(signature_to_dict(self._sig))
         info.pipeline_hash = pipeline_hash
-        info_pub.publish(info)
+        self._info_pub.publish(info)
 
     def run(self, frames, *, task: str, stop_event: threading.Event) -> RunnerResult:
         """Publish observations and actions from timer and subscription callbacks until stopped."""
         node = self._node
         self._frames = frames
-        self._follower.reset()
-        self._published = 0
+        frames.reset_state()
+        with self._lock:
+            self._follower.reset()
+            self._published = 0
         reliable = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE)
         sub = node.create_subscription(
             TensorList,
@@ -96,16 +100,24 @@ class TensorListBridgeRunner:
         return RunnerResult(True, "Stopped")
 
     def _tick(self) -> None:
+        try:
+            self._tick_once()
+        except Exception as err:
+            self._node.get_logger().error(f"tick skipped: {err!r}", throttle_duration_sec=_WARN_THROTTLE_S)
+
+    def _tick_once(self) -> None:
         frames = self._frames
         if frames is None or not frames.warmed_up:
             return
         now = self._node.get_clock().now()
         frame = {k: v for k, v in frames.sample_frame().items() if k in self._sig.observations}
         self._obs_pub.publish(frame_to_tensorlist(frame, now.to_msg(), self._casts))
-        action = self._follower.action_at(now.nanoseconds)
+        with self._lock:
+            action = self._follower.action_at(now.nanoseconds)
         if action is not None:
             frames.publish_frame({"action": action.astype(np.float64)})
-            self._published += 1
+            with self._lock:
+                self._published += 1
 
     def _on_chunk(self, msg: TensorList) -> None:
         try:
@@ -116,7 +128,9 @@ class TensorListBridgeRunner:
         if "action" not in arrays:
             self._warn("dropping action chunk without an 'action' tensor")
             return
-        if not self._follower.push(_stamp_ns(msg.header), arrays["action"]):
+        with self._lock:
+            accepted = self._follower.push(_stamp_ns(msg.header), arrays["action"])
+        if not accepted:
             self._warn("dropping invalid or stale action chunk")
 
     def _warn(self, text: str) -> None:
@@ -127,10 +141,15 @@ class TensorListBridgeRunner:
         if self._follower is None or self._node is None:
             return RunnerFeedback()
         now_ns = self._node.get_clock().now().nanoseconds
-        return RunnerFeedback(queue_depth=self._follower.remaining(now_ns), published_actions=self._published)
+        with self._lock:
+            return RunnerFeedback(queue_depth=self._follower.remaining(now_ns), published_actions=self._published)
 
     def request_stop(self) -> None:
         """No-op: ``run`` only waits on ``stop_event``."""
 
     def teardown(self) -> None:
-        """Nothing to release."""
+        """Destroy the publishers created in ``setup`` (safe before ``setup`` and when repeated)."""
+        for pub in (self._obs_pub, self._info_pub):
+            if pub is not None:
+                self._node.destroy_publisher(pub)
+        self._obs_pub = self._info_pub = None
