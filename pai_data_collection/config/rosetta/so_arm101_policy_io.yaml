@@ -1,0 +1,66 @@
+# Policy I/O (SI) contract for the phase-1 Rosetta bridge. No unit operators: tensors on /policy/* are radians.
+#
+# Schema: rosetta 0.2.0. Same topics as so_arm101.yaml; only the unit handling differs.
+
+robot_type: so_arm101
+robot_interface: ros2
+
+# Frame clock. Matches the ros2_control update rate.
+fps: 50
+
+observations:
+  observation.images.wrist:
+    channel:
+      topic: /wrist_camera/image_raw
+      type: sensor_msgs/msg/Image
+      qos: { reliability: best_effort, history: keep_last, depth: 10 }
+    align: { strategy: hold, timeline: header }
+    # Resize for neural network input. FORWARD_ONLY, legal on an observation.
+    apply: [resize: [480, 480]]
+
+  observation.images.static:
+    channel:
+      topic: /static_camera/image_raw
+      type: sensor_msgs/msg/Image
+      qos: { reliability: best_effort, history: keep_last, depth: 10 }
+    align: { strategy: hold, timeline: header }
+    apply: [resize: [480, 480]]
+
+  observation.state:
+    channel:
+      topic: /joint_states
+      type: sensor_msgs/msg/JointState
+      qos: { reliability: reliable, history: keep_last, depth: 50 }
+    align: { strategy: hold, timeline: header }
+    # Names must match the joint names published in /joint_states.
+    select:
+      [
+        position.shoulder_pan_joint,
+        position.shoulder_lift_joint,
+        position.elbow_flex_joint,
+        position.wrist_flex_joint,
+        position.wrist_roll_joint,
+        position.gripper_joint,
+      ]
+
+actions:
+  action:
+    channel:
+      topic: /forward_position_controller/commands
+      type: std_msgs/msg/Float64MultiArray
+      qos: { reliability: reliable, history: keep_last, depth: 10 }
+      safety: hold
+    # Float64MultiArray carries no header, so `receive` is the only timeline
+    # available here.
+    align: { strategy: hold, timeline: receive }
+    select:
+      [
+        shoulder_pan_joint,
+        shoulder_lift_joint,
+        elbow_flex_joint,
+        wrist_flex_joint,
+        wrist_roll_joint,
+        gripper_joint,
+      ]
+    apply:
+      - clamp: { min: -3.14159, max: 3.14159 }

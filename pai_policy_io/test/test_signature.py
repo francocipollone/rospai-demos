@@ -18,11 +18,13 @@ from pai_policy_io.signature import (
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "policy_signature_example.yaml"
+FPS = 50
 
 
 def test_load_example_signature_round_trips(tmp_path):
+    """The example fixture loads and survives a dump/load round trip."""
     sig = load_signature(FIXTURE)
-    assert sig.fps == 50 and sig.robot == "so_arm101"
+    assert sig.fps == FPS and sig.robot == "so_arm101"
     assert sig.observations["observation.images.wrist"] == TensorSpec("uint8", (480, 480, 3), layout="HWC_RGB")
     assert sig.observations["observation.state"].shape == (6,)
     assert sig.action.joints[0] == "shoulder_pan_joint" and sig.action.kinds == ("continuous",) * 6
@@ -32,6 +34,7 @@ def test_load_example_signature_round_trips(tmp_path):
 
 
 def test_kinds_length_mismatch_raises():
+    """A kinds list of the wrong length is rejected."""
     data = yaml.safe_load(FIXTURE.read_text())
     data["action"]["kinds"] = ["continuous"]
     with pytest.raises(SignatureError, match="kinds"):
@@ -39,6 +42,7 @@ def test_kinds_length_mismatch_raises():
 
 
 def test_unknown_strategy_raises():
+    """An unknown execution strategy is rejected."""
     data = yaml.safe_load(FIXTURE.read_text())
     data["execution"]["strategy"] = "magic"
     with pytest.raises(SignatureError, match="strategy"):
@@ -46,6 +50,7 @@ def test_unknown_strategy_raises():
 
 
 def test_pipeline_hash_is_deterministic_and_ignores_execution():
+    """The pipeline hash is stable and independent of the execution section."""
     sig = load_signature(FIXTURE)
     h1 = pipeline_hash(sig, "cfg", {"rosetta": "0.2.0"})
     assert h1.startswith("sha256:") and len(h1) == 7 + 64
@@ -55,6 +60,7 @@ def test_pipeline_hash_is_deterministic_and_ignores_execution():
 
 
 def test_io_sections_equal_ignores_execution_and_hash():
+    """I/O comparison ignores execution and pipeline_hash."""
     sig = load_signature(FIXTURE)
     other = dataclasses.replace(sig, execution=None, pipeline_hash="sha256:ffff")
     assert io_sections_equal(sig, other)

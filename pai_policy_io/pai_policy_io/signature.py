@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -143,9 +143,7 @@ def _action_from_dict(data: dict) -> ActionSpec:
             raise SignatureError(f"unknown action kind '{kind}', expected one of {ACTION_KINDS}")
     if action_type not in ACTION_TYPES:
         raise SignatureError(f"unknown action_type '{action_type}', expected one of {ACTION_TYPES}")
-    return ActionSpec(
-        _require(data, "dtype", "action"), _require(data, "units", "action"), action_type, joints, kinds
-    )
+    return ActionSpec(_require(data, "dtype", "action"), _require(data, "units", "action"), action_type, joints, kinds)
 
 
 def _execution_from_dict(data: dict) -> ExecutionSpec:

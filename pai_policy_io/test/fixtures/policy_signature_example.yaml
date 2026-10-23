@@ -4,8 +4,10 @@ robot: so_arm101
 fps: 50
 
 observations:
-  observation.images.wrist: { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
-  observation.images.static: { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
+  observation.images.wrist:
+    { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
+  observation.images.static:
+    { dtype: uint8, shape: [480, 480, 3], layout: HWC_RGB }
   observation.state:
     dtype: float32
     units: si
@@ -32,7 +34,8 @@ action:
       wrist_roll_joint,
       gripper_joint,
     ]
-  kinds: [continuous, continuous, continuous, continuous, continuous, continuous]
+  kinds:
+    [continuous, continuous, continuous, continuous, continuous, continuous]
 
 execution:
   horizon: 100
