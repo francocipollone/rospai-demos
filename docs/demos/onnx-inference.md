@@ -79,7 +79,7 @@ flowchart LR
     pixi run zenoh-router"] --> B["2. Start Gazebo
     pixi run so-arm-gz"]
     B --> C["3. Bridge + inference node
-    pixi run so-arm-onnx-inference"]
+    pixi run so-arm-onnx-inference -- intra_op_threads:=8"]
     C --> D["4. Trigger Inference
     ros2 action send_goal /run_policy ..."]
     D --> E["Arm places cubes on tray"]
@@ -100,10 +100,15 @@ Wait until the robot has settled and the three cubes are on the table.
 In a third terminal:
 
 ```bash
-pixi run so-arm-onnx-inference
+pixi run so-arm-onnx-inference -- intra_op_threads:=8
 ```
 
-This runs `policy_io_inference.launch.py` with `use_sim_time:=true` and the model in `models/act_so101`. To use another model directory, pass it as the task argument: `pixi run so-arm-onnx-inference /path/to/model_dir`. The launch file starts Rosetta's `policy_runner_node` with [`policy_runner_tensorlist.yaml`](../../pai_data_collection/config/rosetta/policy_runner_tensorlist.yaml) and the [SI contract](../../pai_data_collection/config/rosetta/so_arm101_policy_io.yaml), and it starts `inference_node`. It also accepts `provider`, `contract_path` and `enforce_pipeline_hash`; run `ros2 launch pai_bringup policy_io_inference.launch.py --show-args` to list them.
+This runs `policy_io_inference.launch.py` with `use_sim_time:=true` and the model in `models/act_so101`. Arguments after `--` go to the launch file. `intra_op_threads:=8` limits ONNX Runtime to 8 threads so that Gazebo keeps enough CPU on the same machine (see [What to Expect](#what-to-expect)). Pick a value that leaves a few cores free for Gazebo on your machine. To use another model directory, pass it before the `--`: `pixi run so-arm-onnx-inference /path/to/model_dir -- intra_op_threads:=8`.
+
+> [!WARNING]
+> Without `intra_op_threads`, the launch file keeps ONNX Runtime's default of `0`, which uses every core. In our measurements that starved Gazebo down to about 0.12× real time.
+
+The launch file starts Rosetta's `policy_runner_node` with [`policy_runner_tensorlist.yaml`](../../pai_data_collection/config/rosetta/policy_runner_tensorlist.yaml) and the [SI contract](../../pai_data_collection/config/rosetta/so_arm101_policy_io.yaml), and it starts `inference_node`. It also accepts `provider`, `contract_path` and `enforce_pipeline_hash`; run `ros2 launch pai_bringup policy_io_inference.launch.py --show-args` to list them.
 
 The inference node is ready when it logs:
 
@@ -120,39 +125,26 @@ pixi run ros2 action send_goal /run_policy \
     rosetta_interfaces/action/RunPolicy "{prompt: 'place cubes on tray'}" --feedback
 ```
 
-The feedback reports `published_actions`, which keeps increasing while the bridge publishes commands. Inference runs until the goal is cancelled (`Ctrl+C` on the `send_goal` command). To run again, reset the cubes as described in [the pre-trained demo](pretrained-demo.md#reset-the-cubes-and-run-again).
+The feedback reports `published_actions`, which keeps increasing while the bridge publishes commands. Inference runs until the goal is cancelled. `Ctrl+C` on the `send_goal` command cancels it: the client prints `Canceling goal...` and the policy runner logs `Finished (cancelled)`. You can also cancel all goals from another terminal:
+
+```bash
+pixi run ros2 service call /run_policy/_action/cancel_goal action_msgs/srv/CancelGoal "{}"
+```
+
+If the `send_goal` client is killed in any other way (for example by `timeout`), the goal keeps running on the server until it is cancelled. To run again, reset the cubes as described in [the pre-trained demo](pretrained-demo.md#reset-the-cubes-and-run-again).
 
 ### What to Expect
 
 Measured on an Intel Core Ultra 9 275HX (24 threads) on the CPU provider, with Gazebo running headless on the same machine. All rates are wall-clock rates from `ros2 topic hz`, sampled one after the other during the run. Gazebo was running slower than real time, so the real-time factor (RTF) is listed too; at RTF 0.74, 36.6 Hz wall clock is the nominal 50 Hz in sim time.
 
-| Configuration                                           | RTF  | `/joint_states` | `/policy/observation` | `/policy/action_chunk` | `/forward_position_controller/commands` | Result                                                                  |
-| ------------------------------------------------------- | ---- | --------------- | --------------------- | ---------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
-| `intra_op_threads: 8` (see the note below)              | 0.74 | 36.6 Hz         | 31.9 Hz               | 8.4 Hz                 | 37.4 Hz                                 | All three cubes on the tray about 34 s (sim time) after the goal        |
-| `pixi run so-arm-onnx-inference` (ONNX Runtime default) | 0.12 | 6.9 Hz          | 24.6 Hz               | 7.5 Hz                 | 8.8 Hz                                  | Two cubes on the tray after 36 s of sim time, run stopped at that point |
+| Configuration                                           | RTF  | `/joint_states` | `/policy/observation` | `/policy/action_chunk` | `/forward_position_controller/commands` | Result                                                                                                                                                 |
+| ------------------------------------------------------- | ---- | --------------- | --------------------- | ---------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-- intra_op_threads:=8`                                | 0.74 | 36.6 Hz         | 31.9 Hz               | 8.4 Hz                 | 37.4 Hz                                 | All three cubes on the tray about 34 s (sim time) after the goal                                                                                       |
+| No `intra_op_threads` (ONNX Runtime default, all cores) | 0.12 | 6.9 Hz          | 24.6 Hz               | 7.5 Hz                 | 8.8 Hz                                  | Red and green cubes on the tray and blue in the gripper 36 s (sim time) after the goal, when our 90 s wall-clock time limit for the test ended the run |
 
 One inference takes about 120 ms on this CPU (minimum interval between chunks 0.114 s with 8 threads). Each chunk holds 100 steps (2 s at 50 Hz), so the bridge never ran out of commands: the goal feedback's `queue_depth` stayed between 88 and 100 during the run. The inference node skips observations that arrive while it is busy and always runs on the newest one.
 
-> [!NOTE]
-> **Limit the inference threads when Gazebo runs on the same CPU.** With the default `intra_op_threads: 0`, ONNX Runtime uses every core (the node used about 2150 % CPU). That starves Gazebo, which then runs at about 0.12× real time. The launch file does not expose `intra_op_threads` yet, so to limit it, start the bridge and the node separately:
->
-> ```bash
-> pixi shell
-> ```
->
-> ```bash
-> ros2 launch rosetta policy_runner_launch.py \
->     params_file:=$(ros2 pkg prefix pai_data_collection)/share/pai_data_collection/config/rosetta/policy_runner_tensorlist.yaml \
->     contract_path:=$(ros2 pkg prefix pai_data_collection)/share/pai_data_collection/config/rosetta/so_arm101_policy_io.yaml \
->     use_sim_time:=true
-> ```
->
-> ```bash
-> ros2 run pai_policy_inference inference_node --ros-args \
->     -p model_dir:=$PWD/models/act_so101 -p use_sim_time:=true -p intra_op_threads:=8
-> ```
->
-> With 8 threads the node used about 780 % CPU and Gazebo ran at 0.74× real time.
+With the default `intra_op_threads: 0`, ONNX Runtime used every core: the node ran at about 2150 % CPU and Gazebo slowed to about 0.12× real time. With `intra_op_threads:=8` the node used about 780–820 % CPU. Gazebo ran at 0.74× real time in the measured run and at 0.58× in a later check, which got the same 8.3 Hz chunk rate.
 
 ---
 

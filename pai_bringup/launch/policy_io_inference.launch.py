@@ -41,6 +41,11 @@ def generate_launch_description():
             description="ONNX Runtime execution provider: cpu or cuda.",
         ),
         DeclareLaunchArgument(
+            "intra_op_threads",
+            default_value="0",
+            description="ONNX Runtime intra-op threads; 0 uses the ONNX Runtime default (all cores).",
+        ),
+        DeclareLaunchArgument(
             "contract_path",
             default_value=PathJoinSubstitution([rosetta_config, "so_arm101_policy_io.yaml"]),
             description="Rosetta SI contract describing the observation/action pipeline.",
@@ -71,6 +76,7 @@ def generate_launch_description():
             {
                 "model_dir": LaunchConfiguration("model_dir"),
                 "provider": LaunchConfiguration("provider"),
+                "intra_op_threads": ParameterValue(LaunchConfiguration("intra_op_threads"), value_type=int),
                 "enforce_pipeline_hash": ParameterValue(LaunchConfiguration("enforce_pipeline_hash"), value_type=bool),
                 "use_sim_time": ParameterValue(LaunchConfiguration("use_sim_time"), value_type=bool),
             }
