@@ -108,7 +108,7 @@ This runs `policy_io_inference.launch.py` with `use_sim_time:=true` and the mode
 > [!WARNING]
 > Without `intra_op_threads`, the launch file keeps ONNX Runtime's default of `0`, which uses every core. In our measurements that starved Gazebo down to about 0.12× real time.
 
-The launch file starts Rosetta's `policy_runner_node` with [`policy_runner_tensorlist.yaml`](../../pai_data_collection/config/rosetta/policy_runner_tensorlist.yaml) and the [SI contract](../../pai_data_collection/config/rosetta/so_arm101_policy_io.yaml), and it starts `inference_node`. It also accepts `provider`, `contract_path` and `enforce_pipeline_hash`; run `ros2 launch pai_bringup policy_io_inference.launch.py --show-args` to list them.
+The launch file starts Rosetta's `policy_runner_node` with [`policy_runner_tensorlist.yaml`](../../pai_data_collection/config/rosetta/policy_runner_tensorlist.yaml) and the [SI contract](../../pai_data_collection/config/rosetta/so_arm101_policy_io.yaml), and it starts `inference_node`. It also accepts `provider`, `contract_path`, `enforce_pipeline_hash` and `pipeline_info_timeout_s`; run `ros2 launch pai_bringup policy_io_inference.launch.py --show-args` to list them.
 
 The inference node is ready when it logs:
 
@@ -177,7 +177,7 @@ Re-export the model with the contract you deploy with. Only to debug, `enforce_p
 [ERROR] [inference_node]: pipeline hash mismatch: model sha256:a41ccabc..., pipeline sha256:8da3f9a5... (enforcement disabled, continuing)
 ```
 
-**`no PipelineInfo received on /policy/pipeline_info within 10 s`.** The bridge did not publish its `PipelineInfo` in time. Check that the Zenoh router is running and that the policy runner was started with `framework: tensorlist` (the `policy_runner_tensorlist.yaml` params file). Raise `pipeline_info_timeout_s` if the bridge starts slowly.
+**`no PipelineInfo received on /policy/pipeline_info within 10 s`.** The bridge did not publish its `PipelineInfo` in time. Check that the Zenoh router is running and that the policy runner was started with `framework: tensorlist` (the `policy_runner_tensorlist.yaml` params file). Raise the timeout if the bridge starts slowly: `pixi run so-arm-onnx-inference -- pipeline_info_timeout_s:=30`.
 
 **`execution provider 'cuda' is not available in this ONNX Runtime build`.** The ONNX Runtime library in the Pixi environment is CPU-only. Use `provider:=cpu`.
 

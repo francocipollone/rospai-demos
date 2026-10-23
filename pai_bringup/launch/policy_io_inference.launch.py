@@ -46,6 +46,11 @@ def generate_launch_description():
             description="ONNX Runtime intra-op threads; 0 uses the ONNX Runtime default (all cores).",
         ),
         DeclareLaunchArgument(
+            "pipeline_info_timeout_s",
+            default_value="10.0",
+            description="Seconds the inference node waits for PipelineInfo at start-up before exiting.",
+        ),
+        DeclareLaunchArgument(
             "contract_path",
             default_value=PathJoinSubstitution([rosetta_config, "so_arm101_policy_io.yaml"]),
             description="Rosetta SI contract describing the observation/action pipeline.",
@@ -77,6 +82,9 @@ def generate_launch_description():
                 "model_dir": LaunchConfiguration("model_dir"),
                 "provider": LaunchConfiguration("provider"),
                 "intra_op_threads": ParameterValue(LaunchConfiguration("intra_op_threads"), value_type=int),
+                "pipeline_info_timeout_s": ParameterValue(
+                    LaunchConfiguration("pipeline_info_timeout_s"), value_type=float
+                ),
                 "enforce_pipeline_hash": ParameterValue(LaunchConfiguration("enforce_pipeline_hash"), value_type=bool),
                 "use_sim_time": ParameterValue(LaunchConfiguration("use_sim_time"), value_type=bool),
             }
