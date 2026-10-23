@@ -17,4 +17,9 @@ setup(
     description="Policy I/O pipeline: policy signature, pipeline hash and tensor pre-processing nodes.",
     license="Apache-2.0",
     extras_require={"test": ["pytest"]},
+    entry_points={
+        "rosetta.policy_runners": [
+            "tensorlist = pai_policy_io.rosetta_bridge:TensorListBridgeRunner",
+        ],
+    },
 )

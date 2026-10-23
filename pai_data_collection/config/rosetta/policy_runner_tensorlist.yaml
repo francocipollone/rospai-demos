@@ -1,0 +1,21 @@
+# Policy runner parameters for the Rosetta -> Policy I/O TensorList bridge (phase 1).
+#
+# Pass this file to rosetta's policy_runner_launch.py as the params file:
+#
+#   ros2 launch rosetta policy_runner_launch.py \
+#       params_file:=$(ros2 pkg prefix pai_data_collection)/share/pai_data_collection/config/rosetta/policy_runner_tensorlist.yaml
+#
+# The bridge publishes each sampled Rosetta frame on observation_topic and follows the
+# action chunks received on action_chunk_topic. Parameters not listed here take the
+# node's declared default.
+
+policy_runner:
+  ros__parameters:
+    framework: "tensorlist"
+    observation_topic: "/policy/observation"
+    action_chunk_topic: "/policy/action_chunk"
+    pipeline_info_topic: "/policy/pipeline_info"
+    robot: "so_arm101"
+
+    # Run until stopped. Override per-goal with RunPolicy's max_duration_s.
+    default_max_duration_s: 0.0
